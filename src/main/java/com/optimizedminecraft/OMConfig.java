@@ -38,8 +38,35 @@ public final class OMConfig {
 	/** Show a toast when the Java heap looks too small for the chosen render distance. */
 	public boolean memoryWarnings = true;
 
+	/** Turn clouds off (applied once; re-enable them in Video Settings if you want them back). */
+	public boolean disableClouds = true;
+	/** Thinner fog band at the edge of loaded chunks, and rain/biome fog pushed further out. */
+	public boolean reduceFog = true;
+	/** How much further out weather and biome fog starts when {@link #reduceFog} is on. */
+	public float fogDistanceMultiplier = 3.0F;
+
+	/** Draw low-detail terrain (LODs) beyond the real render distance. */
+	public boolean lodEnabled = true;
+	/** How far LODs reach, in chunks. */
+	public int lodDistance = 512;
+	/**
+	 * How many on-screen pixels one LOD cell may cover before the next finer level is used.
+	 * Lower is sharper and costs more; this is the "screen-space error" budget.
+	 */
+	public float lodPixelError = 6.0F;
+	/** LOD worker threads; 0 picks cores - 2. */
+	public int lodThreads = 0;
+	/** Upper bound for GPU memory used by LOD meshes, in MB. */
+	public int lodGpuBudgetMb = 768;
+	/** Tint LODs by detail level, like Nanite's cluster view. */
+	public boolean lodDebugColors = false;
+	/** Show the loaded-chunk map overlay (toggle in game with the O key). */
+	public boolean showChunkMap = false;
+
 	/** Internal: set once the first-launch tweaks have been applied. */
 	public boolean firstLaunchDone = false;
+	/** Internal: which one-time defaults (like clouds off) have been applied. */
+	public int appliedDefaultsVersion = 0;
 
 	public static synchronized OMConfig get() {
 		if (instance == null) {
@@ -50,6 +77,12 @@ public final class OMConfig {
 
 	public int clampedMaxRenderDistance() {
 		return Math.max(VANILLA_MAX_VIEW_DISTANCE, Math.min(maxRenderDistance, HARD_MAX_RENDER_DISTANCE));
+	}
+
+	public static final int MAX_LOD_DISTANCE = 4096;
+
+	public int clampedLodDistance() {
+		return Math.max(0, Math.min(lodDistance, MAX_LOD_DISTANCE));
 	}
 
 	/** Upper bound for server-side view distance. */

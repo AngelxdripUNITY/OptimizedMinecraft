@@ -40,6 +40,7 @@ jobs:
           if [ -z "${{ matrix.args }}" ]; then
             ./gradlew runProductionClientGameTest --stacktrace 2>&1 | tee gametest.log
             grep -q "OPTIMIZEDMC GAMETEST PASSED" gametest.log
+            grep -q "OPTIMIZEDMC LOD GAMETEST PASSED" gametest.log
           else
             # Negative control: with the server patches off the test must notice the 32 chunk cap.
             ./gradlew runProductionClientGameTest ${{ matrix.args }} --stacktrace 2>&1 | tee gametest.log || true
@@ -48,7 +49,7 @@ jobs:
       - name: summarize gametest errors
         if: failure()
         run: |
-          grep -n -E "OptimizedMinecraft|view distance|GameTest|gametest" gametest.log | head -40 || true
+          grep -n -E "OptimizedMinecraft|view distance|GameTest|gametest" gametest.log | grep -v SCREENSHOT | head -40 || true
           grep -n -m 2 -A 25 -E "AssertionError|ArrayIndexOutOfBounds|IndexOutOfBounds|NullPointerException|Mixin.*(fail|error)|InvalidInjection|crash" gametest.log | head -120 || true
       - uses: actions/upload-artifact@v7
         if: always()

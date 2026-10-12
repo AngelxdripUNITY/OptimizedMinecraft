@@ -1,4 +1,15 @@
 {
 	"optimizedmc.toast.memory.title": "Not enough Java memory",
-	"optimizedmc.toast.memory.body": "%s chunks needs ~%s GB, Java has %s GB. Raise -Xmx."
+	"optimizedmc.toast.memory.body": "%s chunks needs ~%s GB, Java has %s GB. Raise -Xmx.",
+	"optimizedmc.number_field.value": "%s: %s",
+	"optimizedmc.number_field.tooltip": "Click and type a number (%s-%s), then press Enter. Arrow keys or the mouse wheel step it.",
+	"optimizedmc.options.header": "OptimizedMinecraft",
+	"optimizedmc.options.lodDistance": "LOD Distance",
+	"optimizedmc.options.lodEnabled": "LODs",
+	"optimizedmc.options.lodPixelError": "LOD Pixel Error",
+	"optimizedmc.options.lodDebugColors": "LOD Level Colors",
+	"optimizedmc.options.reduceFog": "Reduce Fog",
+	"optimizedmc.options.chunkMap": "Chunk Map (O)",
+	"key.optimizedmc.chunk_map": "Toggle Chunk Map",
+	"key.category.optimizedmc.main": "OptimizedMinecraft"
 }

@@ -5,7 +5,10 @@
 	"name": "OptimizedMinecraft tests",
 	"environment": "client",
 	"entrypoints": {
-		"fabric-client-gametest": ["com.optimizedminecraft.test.RenderDistanceClientGameTest"]
+		"fabric-client-gametest": [
+			"com.optimizedminecraft.test.RenderDistanceClientGameTest",
+			"com.optimizedminecraft.test.LodClientGameTest"
+		]
 	},
 	"depends": {
 		"optimizedmc": "*"

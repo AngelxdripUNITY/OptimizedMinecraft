@@ -3,7 +3,11 @@
 	"package": "com.optimizedminecraft.client.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
-		"OptionsMixin"
+		"FogRendererMixin",
+		"GameRendererAccessor",
+		"OptionInstanceMixin",
+		"OptionsMixin",
+		"VideoSettingsScreenMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
