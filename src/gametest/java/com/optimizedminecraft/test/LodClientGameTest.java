@@ -87,14 +87,27 @@ public class LodClientGameTest implements FabricClientGameTest {
 		context.waitTicks(5);
 		log("video-settings", context.takeScreenshot("video-settings"));
 
-		double[] target = context.computeOnClient(client -> {
-			NumberFieldWidget field = findField(client.screen);
-			if (field == null) {
-				throw new AssertionError("Render distance number box not found on the Video Settings screen");
+		// The box sits in the "Quality" section further down the list; scroll until it is on screen.
+		double[] target = null;
+		for (int attempt = 0; attempt < 30; attempt++) {
+			target = context.computeOnClient(client -> {
+				NumberFieldWidget field = findField(client.screen);
+				if (field == null) {
+					throw new AssertionError("Render distance number box not found on the Video Settings screen");
+				}
+				double scale = client.getWindow().getGuiScale();
+				boolean visible = field.getY() > 40 && field.getBottom() < client.getWindow().getGuiScaledHeight() - 40;
+				return new double[]{(field.getX() + field.getWidth() / 2.0) * scale, (field.getY() + field.getHeight() / 2.0) * scale, visible ? 1 : 0,
+						client.getWindow().getWidth() / 2.0, client.getWindow().getHeight() / 2.0};
+			});
+			if (target[2] == 1) {
+				break;
 			}
-			double scale = client.getWindow().getGuiScale();
-			return new double[]{(field.getX() + field.getWidth() / 2.0) * scale, (field.getY() + field.getHeight() / 2.0) * scale};
-		});
+			context.getInput().setCursorPos(target[3], target[4]);
+			context.getInput().scroll(-1);
+			context.waitTick();
+		}
+		log("video-settings-render-distance", context.takeScreenshot("video-settings-render-distance"));
 		context.getInput().setCursorPos(target[0], target[1]);
 		context.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
 		context.getInput().typeChars("20");
