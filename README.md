@@ -3,7 +3,9 @@
 A Fabric mod for Minecraft **1.21.11** that:
 
 - **Lifts the render distance cap.** The slider goes past 32, up to 96 chunks by default and 125 at most.
-  In singleplayer and on servers running this mod, the server really sends that many chunks.
+  In singleplayer the built-in server really sends that many chunks, and CI checks this in a real game client
+  on every push. On a multiplayer server, the server decides: it needs this mod too (untested on dedicated
+  servers so far), or use [Bobby](https://modrinth.com/mod/bobby) client-side.
 - **Unlocks the framerate on first launch.** It sets Max Framerate to Unlimited and turns VSync off, once.
   After that, whatever you change in Video Settings is kept.
 - **Warns you when Java doesn't have enough memory** for the render distance you picked. Every extra chunk
@@ -92,3 +94,7 @@ Needs JDK 25 to run Gradle (the mod itself targets Java 21).
 ./gradlew build                          # jar in build/libs/
 ./gradlew runProductionClientGameTest    # starts the game and checks render distance > 32 really works (Linux needs xvfb)
 ```
+
+The game test creates a superflat world, raises render distance to 40 and waits for a chunk 36 chunks away
+to arrive. CI also runs it with `-PvanillaServer` (server patches off) and expects it to fail at 32, so a
+passing test really means the cap was lifted.
