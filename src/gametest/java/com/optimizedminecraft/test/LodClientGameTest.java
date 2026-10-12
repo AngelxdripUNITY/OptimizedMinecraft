@@ -15,6 +15,7 @@ import com.optimizedminecraft.client.lod.LodManager;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.fabricmc.fabric.api.client.gametest.v1.world.TestWorldSave;
 import net.minecraft.SharedConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,22 +36,13 @@ public class LodClientGameTest implements FabricClientGameTest {
 		config.showChunkMap = false;
 		context.runOnClient(client -> client.options.renderDistance().set(8));
 
+		TestWorldSave save;
 		try (TestSingleplayerContext singleplayer = context.worldBuilder()
 				.setUseConsistentSettings(false)
 				.adjustSettings(settings -> settings.setSeed("optimizedmc"))
 				.create()) {
-			singleplayer.getServer().runCommand("gamemode spectator @a");
-			singleplayer.getServer().runCommand("tp @a 0 160 0 0 12");
-			context.waitTicks(20);
-
-			long start = System.nanoTime();
-			context.waitFor(client -> {
-				LodManager.Stats stats = LodManager.INSTANCE.stats();
-				return stats.drawnClusters() >= 8 && stats.queued() == 0 && stats.building() == 0;
-			}, SharedConstants.TICKS_PER_MINUTE * 5);
-			context.waitTicks(20);
-			LodManager.Stats stats = context.computeOnClient(client -> LodManager.INSTANCE.stats());
-			LOGGER.info("LOD settled in {} s: {}", (System.nanoTime() - start) / 1_000_000_000L, stats);
+			save = singleplayer.getWorldSave();
+			LodManager.Stats stats = settle(context, singleplayer, "first visit");
 			if (stats.drawnQuads() == 0) {
 				throw new AssertionError("LODs were built but nothing was drawn: " + stats);
 			}
@@ -65,7 +57,38 @@ public class LodClientGameTest implements FabricClientGameTest {
 			log("chunk-map", context.takeScreenshot("chunk-map"));
 			config.showChunkMap = false;
 		}
+
+		// Second visit: predicted terrain should come from the disk cache instead of the generator.
+		try (TestSingleplayerContext singleplayer = save.open()) {
+			LodManager.Stats before = context.computeOnClient(client -> LodManager.INSTANCE.stats());
+			LodManager.Stats stats = settle(context, singleplayer, "second visit");
+			long fromDisk = stats.clustersFromDisk() - before.clustersFromDisk();
+			long sampled = stats.totalSamples() - before.totalSamples();
+			LOGGER.info("Second visit: {} clusters from disk, {} new noise samples", fromDisk, sampled);
+			if (fromDisk == 0) {
+				throw new AssertionError("LOD disk cache was not used on the second visit");
+			}
+		}
 		LOGGER.info("OPTIMIZEDMC LOD GAMETEST PASSED");
+	}
+
+	private static LodManager.Stats settle(ClientGameTestContext context, TestSingleplayerContext singleplayer, String label) {
+		singleplayer.getServer().runCommand("gamemode spectator @a");
+		singleplayer.getServer().runCommand("tp @a 0 160 0 0 12");
+		context.waitTicks(20);
+		long start = System.nanoTime();
+		long samplesBefore = context.computeOnClient(client -> LodManager.INSTANCE.stats().totalSamples());
+		context.waitFor(client -> {
+			LodManager.Stats stats = LodManager.INSTANCE.stats();
+			return stats.drawnClusters() >= 8 && stats.queued() == 0 && stats.building() == 0;
+		}, SharedConstants.TICKS_PER_MINUTE * 5);
+		context.waitTicks(20);
+		double seconds = (System.nanoTime() - start) / 1e9;
+		LodManager.Stats stats = context.computeOnClient(client -> LodManager.INSTANCE.stats());
+		long samples = stats.totalSamples() - samplesBefore;
+		LOGGER.info("LOD {} settled in {} s ({} noise samples, {} samples/s overall): {}", label, String.format("%.1f", seconds), samples,
+				String.format("%.0f", samples / Math.max(seconds, 0.001)), stats);
+		return stats;
 	}
 
 	/** Prints a small JPEG of the screenshot to the log so it can be checked from CI output. */

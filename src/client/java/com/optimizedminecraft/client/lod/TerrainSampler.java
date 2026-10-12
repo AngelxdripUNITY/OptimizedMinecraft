@@ -12,7 +12,11 @@ import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.chunk.ChunkGenerator;
+import net.minecraft.util.Mth;
+import net.minecraft.world.level.levelgen.DensityFunction;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
+import net.minecraft.world.level.levelgen.NoiseRouter;
 import net.minecraft.world.level.levelgen.RandomState;
 
 /**
@@ -24,6 +28,8 @@ import net.minecraft.world.level.levelgen.RandomState;
  * Thread-safe: vanilla calls the same methods from its parallel worldgen workers.
  */
 final class TerrainSampler {
+	private static final int SEARCH_STEP = 8;
+
 	private final ChunkGenerator generator;
 	private final RandomState randomState;
 	private final BiomeSource biomes;
@@ -31,6 +37,9 @@ final class TerrainSampler {
 	private final LevelHeightAccessor heightAccessor;
 	private final int seaLevel;
 	private final int minY;
+	/** Set for noise worlds (the normal overworld): enables the fast surface search. */
+	private final NoiseRouter router;
+	private final int maxY;
 
 	TerrainSampler(ServerLevel level) {
 		ServerChunkCache chunkSource = level.getChunkSource();
@@ -41,11 +50,62 @@ final class TerrainSampler {
 		this.heightAccessor = level;
 		this.seaLevel = this.generator.getSeaLevel();
 		this.minY = level.getMinY();
+		this.maxY = level.getMaxY();
+		this.router = this.generator instanceof NoiseBasedChunkGenerator ? this.randomState.router() : null;
+	}
+
+	/**
+	 * Top of the solid ground at (x, z), as top face Y. Vanilla's getBaseHeight builds a whole
+	 * NoiseChunk and walks the column down from the build limit; instead start from the
+	 * generator's own preliminary surface estimate and probe the final density a few times
+	 * around it (about 6-10 noise evaluations).
+	 */
+	private int surface(int x, int z) {
+		if (this.router == null) {
+			return this.generator.getBaseHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, this.heightAccessor, this.randomState);
+		}
+		int y = Mth.floor(this.router.preliminarySurfaceLevel().compute(new DensityFunction.SinglePointContext(x, 0, z)));
+		y = Mth.clamp(y, this.minY + SEARCH_STEP, this.maxY - SEARCH_STEP);
+		int solid;
+		if (this.solid(x, y, z)) {
+			// Climb until two steps of air in a row, so a cave pocket isn't mistaken for the surface.
+			while (true) {
+				if (y + SEARCH_STEP < this.maxY && this.solid(x, y + SEARCH_STEP, z)) {
+					y += SEARCH_STEP;
+				} else if (y + 2 * SEARCH_STEP < this.maxY && this.solid(x, y + 2 * SEARCH_STEP, z)) {
+					y += 2 * SEARCH_STEP;
+				} else {
+					break;
+				}
+			}
+			solid = y;
+		} else {
+			while (y - SEARCH_STEP > this.minY && !this.solid(x, y - SEARCH_STEP, z)) {
+				y -= SEARCH_STEP;
+			}
+			solid = y - SEARCH_STEP;
+			if (solid <= this.minY) {
+				return this.minY;
+			}
+		}
+		// Binary refine inside the step: solid is solid, solid + step is air.
+		int step = SEARCH_STEP / 2;
+		while (step >= 1) {
+			if (this.solid(x, solid + step, z)) {
+				solid += step;
+			}
+			step /= 2;
+		}
+		return solid + 1;
+	}
+
+	private boolean solid(int x, int y, int z) {
+		return this.router.finalDensity().compute(new DensityFunction.SinglePointContext(x, y, z)) > 0.0;
 	}
 
 	/** Writes the surface height (top face Y) and RGB colour of column (x, z) into slot {@code i}. */
 	void sample(int x, int z, int i, short[] heights, int[] colors) {
-		int floor = this.generator.getBaseHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, this.heightAccessor, this.randomState);
+		int floor = this.surface(x, z);
 		if (floor <= this.minY) {
 			heights[i] = LodNode.NO_HEIGHT;
 			return;
@@ -78,7 +138,6 @@ final class TerrainSampler {
 	}
 
 	private static int waterColor(Biome biome, int depth) {
-		float shade = Math.max(0.45F, 1.0F - depth / 48.0F);
-		return LodColors.scale(biome.getWaterColor(), shade);
+		return LodColors.water(biome.getWaterColor(), depth);
 	}
 }

@@ -4,6 +4,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -64,10 +65,24 @@ final class CapturedChunks {
 					mapColor = state.getMapColor(level, mutable);
 				}
 				heights[slot] = (short) (y + 1);
-				colors[slot] = tint(level, mutable, mapColor);
+				if (state.getFluidState().is(FluidTags.WATER)) {
+					colors[slot] = LodColors.water(level.getBiome(mutable).value().getWaterColor(), waterDepth(chunk, mutable, minY));
+				} else {
+					colors[slot] = tint(level, mutable, mapColor);
+				}
 			}
 		}
 		this.chunks.put(pos.toLong(), new Columns(heights, colors));
+	}
+
+	private static int waterDepth(LevelChunk chunk, BlockPos.MutableBlockPos pos, int minY) {
+		int top = pos.getY();
+		int y = top;
+		while (y > minY && top - y < 64 && chunk.getBlockState(pos.setY(y - 1)).getFluidState().is(FluidTags.WATER)) {
+			y--;
+		}
+		pos.setY(top);
+		return top - y + 1;
 	}
 
 	/** Map colours of grass, leaves and water are untinted; apply the biome tint like the real blocks. */
@@ -77,9 +92,6 @@ final class CapturedChunks {
 		}
 		if (mapColor == MapColor.PLANT) {
 			return LodColors.scale(level.getBiome(pos).value().getFoliageColor(), 0.72F);
-		}
-		if (mapColor == MapColor.WATER) {
-			return LodColors.scale(level.getBiome(pos).value().getWaterColor(), 0.85F);
 		}
 		return mapColor.col;
 	}

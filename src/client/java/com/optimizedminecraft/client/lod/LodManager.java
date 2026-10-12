@@ -39,6 +39,7 @@ import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -81,11 +82,13 @@ public final class LodManager {
 	private final CapturedChunks captured = new CapturedChunks();
 	private final AtomicLong frame = new AtomicLong();
 	private final AtomicLong samples = new AtomicLong();
+	private final AtomicLong diskLoads = new AtomicLong();
 	private final AtomicInteger building = new AtomicInteger();
 	private final List<LodNode> drawn = new ArrayList<>();
 
 	private volatile int epoch;
 	private volatile TerrainSampler sampler;
+	private volatile LodDiskCache diskCache;
 	private ClientLevel level;
 	private boolean workersStarted;
 	private MappableRingBuffer projectionBuffer;
@@ -147,11 +150,16 @@ public final class LodManager {
 		this.captured.clear();
 		this.level = newLevel;
 		this.sampler = null;
+		this.diskCache = null;
 		this.gpuBytes = 0;
 		if (newLevel != null && server != null && !newLevel.dimensionType().hasCeiling()) {
 			ServerLevel serverLevel = server.getLevel(newLevel.dimension());
 			if (serverLevel != null) {
 				this.sampler = new TerrainSampler(serverLevel);
+				if (OMConfig.get().lodDiskCache) {
+					String dimension = newLevel.dimension().toString().replaceAll("[^a-zA-Z0-9_.-]+", "_");
+					this.diskCache = new LodDiskCache(server.getWorldPath(LevelResource.ROOT).resolve("optimizedmc_lod").resolve(dimension));
+				}
 			}
 		}
 		if (newLevel != null) {
@@ -244,6 +252,7 @@ public final class LodManager {
 
 	private void build(LodNode node) {
 		TerrainSampler sampler = this.sampler;
+		LodDiskCache cache = this.diskCache;
 		boolean dirty = node.dirty;
 		node.dirty = false;
 		int cell = node.cellSize();
@@ -251,29 +260,31 @@ public final class LodManager {
 		int originZ = node.minZ() - cell + cell / 2;
 		short[] heights = node.heights;
 		int[] colors = node.colors;
-		boolean patchOnly = heights != null && dirty;
-		if (!patchOnly) {
+		if (heights == null || !dirty) {
+			// Fresh build: generator prediction (from disk if we've done this node before), then real chunks on top.
 			heights = new short[LodNode.GRID * LodNode.GRID];
 			colors = new int[LodNode.GRID * LodNode.GRID];
-		}
-		int sampled = 0;
-		for (int j = 0; j < LodNode.GRID; j++) {
-			for (int i = 0; i < LodNode.GRID; i++) {
-				int index = i + j * LodNode.GRID;
-				int x = originX + i * cell;
-				int z = originZ + j * cell;
-				if (this.captured.sample(x, z, index, heights, colors) || patchOnly) {
-					continue;
+			if (sampler == null) {
+				java.util.Arrays.fill(heights, LodNode.NO_HEIGHT);
+			} else if (cache == null || !cache.load(node, heights, colors)) {
+				for (int j = 0; j < LodNode.GRID; j++) {
+					for (int i = 0; i < LodNode.GRID; i++) {
+						sampler.sample(originX + i * cell, originZ + j * cell, i + j * LodNode.GRID, heights, colors);
+					}
 				}
-				if (sampler != null) {
-					sampler.sample(x, z, index, heights, colors);
-					sampled++;
-				} else {
-					heights[index] = LodNode.NO_HEIGHT;
+				this.samples.addAndGet(LodNode.GRID * LodNode.GRID);
+				if (cache != null) {
+					cache.save(node, heights, colors);
 				}
+			} else {
+				this.diskLoads.incrementAndGet();
 			}
 		}
-		this.samples.addAndGet(sampled);
+		for (int j = 0; j < LodNode.GRID; j++) {
+			for (int i = 0; i < LodNode.GRID; i++) {
+				this.captured.sample(originX + i * cell, originZ + j * cell, i + j * LodNode.GRID, heights, colors);
+			}
+		}
 		if (node.level <= 1 || sampler == null) {
 			node.heights = heights;
 			node.colors = colors;
@@ -554,6 +565,17 @@ public final class LodManager {
 		return this.drawn;
 	}
 
+	/** Every cluster with a mesh on the GPU, drawn this frame or not (behind you, for example). */
+	public List<LodNode> readyNodes() {
+		List<LodNode> ready = new ArrayList<>();
+		for (LodNode node : this.nodes.values()) {
+			if (node.ready) {
+				ready.add(node);
+			}
+		}
+		return ready;
+	}
+
 	public Stats stats() {
 		int ready = 0;
 		for (LodNode node : this.nodes.values()) {
@@ -564,10 +586,11 @@ public final class LodManager {
 		double radiusChunks = this.isActive() ? OMConfig.get().clampedLodDistance() : 0;
 		long coveredChunks = (long) (Math.PI * radiusChunks * radiusChunks);
 		return new Stats(this.isActive(), this.sampler != null, this.drawn.size(), this.drawnQuads, ready, this.nodes.size(), this.queue.size(),
-				this.building.get(), this.gpuBytes, this.samples.get(), this.sampleRate, this.captured.size(), coveredChunks);
+				this.building.get(), this.gpuBytes, this.samples.get(), this.sampleRate, this.diskLoads.get(), this.captured.size(), coveredChunks);
 	}
 
 	public record Stats(boolean active, boolean predicting, int drawnClusters, int drawnQuads, int readyClusters, int knownClusters,
-			int queued, int building, long gpuBytes, long totalSamples, double samplesPerSecond, int capturedChunks, long coveredChunks) {
+			int queued, int building, long gpuBytes, long totalSamples, double samplesPerSecond, long clustersFromDisk, int capturedChunks,
+			long coveredChunks) {
 	}
 }

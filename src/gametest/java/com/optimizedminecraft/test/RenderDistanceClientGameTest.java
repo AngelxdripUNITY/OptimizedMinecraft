@@ -3,6 +3,7 @@ package com.optimizedminecraft.test;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.level.ChunkTrackingView;
@@ -41,7 +42,9 @@ public class RenderDistanceClientGameTest implements FabricClientGameTest {
 			// The server sends a rounded area, so the corners of the square never arrive and
 			// TestClientWorldContext.waitForChunksRender() would wait forever; check along an axis instead.
 			try {
-				context.waitFor(client -> hasChunkAt(client, 6) && client.levelRenderer.hasRenderedAllSections(),
+				// Sodium replaces the section renderer, so vanilla's "all sections rendered" flag means nothing there.
+				boolean sodium = FabricLoader.getInstance().isModLoaded("sodium");
+				context.waitFor(client -> hasChunkAt(client, 6) && (sodium || client.levelRenderer.hasRenderedAllSections()),
 						SharedConstants.TICKS_PER_MINUTE * 2);
 			} catch (Throwable t) {
 				LOGGER.error("Initial world never finished rendering: {}", context.computeOnClient(RenderDistanceClientGameTest::describe));

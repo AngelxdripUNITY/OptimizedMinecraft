@@ -87,8 +87,8 @@ public final class ChunkMapHud {
 				image.setPixel(px, py, EMPTY);
 			}
 		}
-		// LOD clusters drawn last frame, coarse first so finer ones paint over them.
-		List<LodNode> drawn = new ArrayList<>(lods.drawnNodes());
+		// Loaded LOD clusters, coarse first so finer ones paint over them.
+		List<LodNode> drawn = lods.readyNodes();
 		drawn.sort((a, b) -> Integer.compare(b.level, a.level));
 		for (LodNode node : drawn) {
 			int x0 = toPixel((node.minX() >> 4) - center.x, radiusChunks, chunksPerPixel);
@@ -144,7 +144,8 @@ public final class ChunkMapHud {
 		lines.add(String.format("LOD area: ~%,d chunks (%d chunk radius)", stats.coveredChunks(), OMConfig.get().clampedLodDistance()));
 		lines.add(String.format("Clusters: %d drawn, %,d quads, %d ready / %d known", stats.drawnClusters(), stats.drawnQuads(),
 				stats.readyClusters(), stats.knownClusters()));
-		lines.add(String.format("Streaming: %d queued, %d building, %,.0f samples/s", stats.queued(), stats.building(), stats.samplesPerSecond()));
+		lines.add(String.format("Streaming: %d queued, %d building, %,.0f samples/s, %,d clusters from disk", stats.queued(), stats.building(),
+				stats.samplesPerSecond(), stats.clustersFromDisk()));
 		lines.add(String.format("GPU: %.1f MB, captured real chunks: %,d", stats.gpuBytes() / 1048576.0, stats.capturedChunks()));
 		lines.add(stats.predicting() ? "Source: world generator + captured chunks" : "Source: captured chunks only (multiplayer)");
 		return lines;

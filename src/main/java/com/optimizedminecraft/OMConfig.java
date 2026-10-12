@@ -58,6 +58,8 @@ public final class OMConfig {
 	public int lodThreads = 0;
 	/** Upper bound for GPU memory used by LOD meshes, in MB. */
 	public int lodGpuBudgetMb = 768;
+	/** Save predicted LOD terrain in the world folder so it loads instantly next time (singleplayer). */
+	public boolean lodDiskCache = true;
 	/** Tint LODs by detail level, like Nanite's cluster view. */
 	public boolean lodDebugColors = false;
 	/** Show the loaded-chunk map overlay (toggle in game with the O key). */
