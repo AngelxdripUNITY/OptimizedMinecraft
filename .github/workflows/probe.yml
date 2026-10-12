@@ -1,0 +1,35 @@
+# Temporary: decompiles Minecraft and prints the code the mixins target.
+name: probe
+on:
+  push:
+    paths: ['.github/workflows/probe.yml']
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'microsoft'
+      - run: chmod +x ./gradlew && ./gradlew genSources --no-configuration-cache -q
+      - name: dump
+        run: |
+          J=$(find ~/.gradle .gradle -name 'minecraft-*sources.jar' 2>/dev/null | head -5); echo "$J"
+          mkdir src_mc && for j in $J; do (cd src_mc && unzip -oq "$j"); done
+          cd src_mc
+          show() { echo "=================== $1 :: $2"; grep -n -E -C ${3:-4} "$2" "$1" || echo "NO MATCH"; }
+          show net/minecraft/client/Options.java 'renderDistance|IntRange\(|framerateLimit|enableVsync|getEffectiveRenderDistance|simulationDistance' 3
+          show net/minecraft/server/level/ChunkMap.java 'ViewDistance|MAX_VIEW|clamp|viewDistance' 3
+          show net/minecraft/server/level/DistanceManager.java 'PlayerTicket|viewDistance|ViewDistance|new .*Tracker' 3
+          show net/minecraft/server/level/ChunkLevel.java '.' 0
+          show net/minecraft/client/server/IntegratedServer.java 'Math.max|ViewDistance|tickServer' 3
+          show net/minecraft/server/players/PlayerList.java 'ViewDistance|viewDistance' 2
+          show net/minecraft/server/level/ServerPlayer.java 'requestedViewDistance|viewDistance' 2
+          show net/minecraft/server/level/ClientInformation.java '.' 0
+          show net/minecraft/client/multiplayer/ClientChunkCache.java 'Range|viewDistance|Storage\(' 2
+          show net/minecraft/client/OptionInstance.java 'record IntRange|IntRange\(|class IntRange' 6
+          show net/minecraft/client/Minecraft.java 'getFramerateLimit|FramerateLimit|setVsync|updateVsync' 3
+          show net/minecraft/client/renderer/GameRenderer.java 'getDepthFar|renderDistance|getRenderDistance' 3
+          show net/minecraft/client/renderer/LevelRenderer.java 'getEffectiveRenderDistance|lastViewDistance|renderDistance' 2
+          ls net/minecraft/server/level/ | head -100
