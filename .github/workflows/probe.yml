@@ -1,0 +1,57 @@
+# Temporary: decompiles Minecraft and dumps the classes the mod builds against,
+# encrypted so only the developer's key can read it (the repo's logs are public).
+name: probe
+on:
+  push:
+    paths: ['.github/workflows/probe.yml']
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'microsoft'
+      - run: chmod +x ./gradlew && ./gradlew genSources --no-configuration-cache -q
+      - name: dump
+        run: |
+          cat > pub.pem <<'KEY'
+          -----BEGIN PUBLIC KEY-----
+          MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAsDcvGh9enDEOW5NnpkRX
+          0JAduryDqvv3Vo5gzclyT9Os4vAtLj2zxR6fdPmnAM9g6Nt70uQ6nVtZ8fkJkoMs
+          bR4SuQKQGnLLz+6+9WgOZRbUBtAVdmnupLCeejzYoRM6kOCDRr6dHiEhuZogzuXg
+          U8DbVLeWr3RlO0OY+Lptp7i566pjOPhuxqUc12Ef3mV/VfiFG7abi0moVkyfUp/B
+          F4ifZVYIXQ0RJV8AG8h0RkFYe1Cid+wL/w5Ur35bTrSstM+wDM3Op1VFG8k43y3b
+          4KXlA9rR+t/8JgoPi4b15gcsoHvq0VxUKGPSjikm4gBbf2AqmGszHdO1kJdIl482
+          THpl5tp0S+ztDcNSxWmkRHOirVqzCwyiGs1yMq6bYD5AWeZAB8K7SCB/Y9Jq+7ix
+          7e+DLZnYQDCzawvBRKyINrSEowyhX++VwZnjX3bQJx3RyBWzMR4vNKIrP9VoQ5/x
+          ak2j+qQsNzL4TxOWjCZiawv6ZCzbiOeIn/hng1TSe92LAgMBAAE=
+          -----END PUBLIC KEY-----
+          KEY
+          mkdir src_mc
+          for j in $(find $PWD/.gradle ~/.gradle -name 'minecraft-*sources.jar' 2>/dev/null); do (cd src_mc && unzip -oq "$j"); done
+          CJ=$(find ~/.gradle -name 'minecraft-client.jar' | head -1); echo "client jar: $CJ"
+          (cd src_mc && unzip -oq "$CJ" 'assets/minecraft/shaders/*')
+          cd src_mc
+          tar czf ../sel.tgz com/mojang/blaze3d net/minecraft/client/renderer net/minecraft/client/gui net/minecraft/client/input \
+            net/minecraft/client/Options.java net/minecraft/client/OptionInstance.java net/minecraft/client/KeyMapping.java \
+            net/minecraft/client/Minecraft.java net/minecraft/client/Camera.java net/minecraft/client/CloudStatus.java \
+            net/minecraft/client/multiplayer/ClientChunkCache.java net/minecraft/client/multiplayer/ClientLevel.java \
+            net/minecraft/world/level/levelgen/NoiseBasedChunkGenerator.java net/minecraft/world/level/levelgen/Heightmap.java \
+            net/minecraft/world/level/levelgen/RandomState.java net/minecraft/world/level/levelgen/flat \
+            net/minecraft/world/level/chunk/ChunkGenerator.java net/minecraft/world/level/chunk/LevelChunk.java net/minecraft/world/level/chunk/ChunkAccess.java \
+            net/minecraft/world/level/biome/Biome.java net/minecraft/world/level/biome/BiomeSource.java net/minecraft/world/level/biome/Climate.java \
+            net/minecraft/world/level/biome/BiomeSpecialEffects.java net/minecraft/tags/BiomeTags.java \
+            net/minecraft/world/level/material/MapColor.java net/minecraft/server/level/ServerChunkCache.java \
+            net/minecraft/world/level/dimension/DimensionType.java net/minecraft/resources net/minecraft/util/ARGB.java \
+            assets/minecraft/shaders
+          ls -la ../sel.tgz
+          cd ..
+          openssl rand -out k.bin 32
+          openssl enc -aes-256-cbc -pbkdf2 -in sel.tgz -out sel.enc -pass file:k.bin
+          openssl pkeyutl -encrypt -pubin -inkey pub.pem -in k.bin -out k.enc
+          echo "KEYB64 $(base64 -w0 k.enc)"
+          base64 -w0 sel.enc | fold -w 150000 | sed 's/^/DATA /'
+          echo
+          echo "END-OF-DATA $(sha256sum sel.enc)"
