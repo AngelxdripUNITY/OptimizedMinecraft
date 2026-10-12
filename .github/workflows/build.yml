@@ -38,7 +38,8 @@ jobs:
       - name: summarize gametest errors
         if: failure()
         run: |
-          grep -n -m 3 -B 2 -A 30 -E "Exception|Error:|AssertionError" gametest.log | grep -v -E "Realms|flite|authlib|OpenAL|ALSA|Narrator" | head -150 || true
+          grep -n -E "OptimizedMinecraft|view distance|GameTest|gametest" gametest.log | head -40 || true
+          grep -n -m 2 -A 25 -E "AssertionError|ArrayIndexOutOfBounds|IndexOutOfBounds|NullPointerException|Mixin.*(fail|error)|InvalidInjection|crash" gametest.log | head -120 || true
       - uses: actions/upload-artifact@v7
         if: always()
         with:
