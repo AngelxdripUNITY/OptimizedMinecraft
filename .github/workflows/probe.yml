@@ -1,4 +1,4 @@
-# Temporary: decompiles Minecraft and prints the code the mixins target.
+# Temporary: decompiles Minecraft and prints the code the mixins target. (v2)
 name: probe
 on:
   push:
@@ -10,7 +10,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-java@v5
         with:
-          java-version: '21'
+          java-version: '25'
           distribution: 'microsoft'
       - run: chmod +x ./gradlew && ./gradlew genSources --no-configuration-cache -q
       - name: dump
