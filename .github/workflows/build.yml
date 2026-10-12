@@ -68,3 +68,28 @@ jobs:
             run/screenshots
             run/logs
             gametest.log
+
+  # Publishes the jar as a GitHub Release ("latest-build") once every test passed, so it can be
+  # downloaded without a GitHub login (Actions artifacts need one).
+  release:
+    if: github.event_name == 'push'
+    needs: [build, client-test]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v7
+        with:
+          name: OptimizedMinecraft
+          path: dist
+      - name: publish latest-build release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          JAR=$(ls dist/*.jar | grep -v -E -- '-(gametest|dev|sources)' | head -1)
+          echo "Publishing $JAR"
+          gh release delete latest-build --yes --cleanup-tag || true
+          gh release create latest-build "$JAR" --target "$GITHUB_SHA" --prerelease \
+            --title "OptimizedMinecraft latest build" \
+            --notes "Built from ${GITHUB_SHA::7} on ${GITHUB_REF_NAME}. All game tests passed (vanilla and with Sodium). Needs Fabric Loader and Fabric API for Minecraft 1.21.11."
