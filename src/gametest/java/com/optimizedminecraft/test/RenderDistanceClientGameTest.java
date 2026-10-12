@@ -37,7 +37,12 @@ public class RenderDistanceClientGameTest implements FabricClientGameTest {
 		}
 
 		try (TestSingleplayerContext singleplayer = context.worldBuilder().create()) {
-			singleplayer.getClientWorld().waitForChunksRender();
+			try {
+				singleplayer.getClientWorld().waitForChunksRender();
+			} catch (Throwable t) {
+				LOGGER.error("Initial world never finished rendering: {}", context.computeOnClient(RenderDistanceClientGameTest::describe));
+				throw t;
+			}
 
 			// Raise the distance in a running world, like a player dragging the slider.
 			context.runOnClient(client -> client.options.renderDistance().set(RENDER_DISTANCE));
@@ -69,6 +74,27 @@ public class RenderDistanceClientGameTest implements FabricClientGameTest {
 		}
 		ChunkPos pos = client.player.chunkPosition();
 		return client.level.getChunkSource().hasChunk(pos.x + PROBE_DISTANCE, pos.z);
+	}
+
+	private static String describe(Minecraft client) {
+		if (client.level == null || client.player == null) {
+			return "no level";
+		}
+		int distance = client.options.getEffectiveRenderDistance();
+		ChunkPos pos = client.player.chunkPosition();
+		int loaded = 0;
+		for (int dx = -distance; dx <= distance; dx++) {
+			for (int dz = -distance; dz <= distance; dz++) {
+				if (client.level.getChunkSource().hasChunk(pos.x + dx, pos.z + dz)) {
+					loaded++;
+				}
+			}
+		}
+		int side = 2 * distance + 1;
+		return "effectiveRenderDistance=" + distance + " player=" + pos + " loaded=" + loaded + "/" + side * side
+				+ " furthestRing=" + furthestLoadedRing(client)
+				+ " allSectionsRendered=" + client.levelRenderer.hasRenderedAllSections()
+				+ " " + client.levelRenderer.getSectionStatistics();
 	}
 
 	private static int furthestLoadedRing(Minecraft client) {
