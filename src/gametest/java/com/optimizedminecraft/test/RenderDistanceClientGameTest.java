@@ -48,8 +48,12 @@ public class RenderDistanceClientGameTest implements FabricClientGameTest {
 				throw t;
 			}
 
-			// Raise the distance in a running world, like a player dragging the slider.
-			context.runOnClient(client -> client.options.renderDistance().set(RENDER_DISTANCE));
+			// Raise the distance in a running world, like a player dragging the slider and closing
+			// Video Settings (which is what sends the new value to the server).
+			context.runOnClient(client -> {
+				client.options.renderDistance().set(RENDER_DISTANCE);
+				client.options.broadcastOptions();
+			});
 			context.waitTicks(40);
 
 			// PlayerList stores whatever the client asked for; the player's tracking view is what ChunkMap actually uses.
