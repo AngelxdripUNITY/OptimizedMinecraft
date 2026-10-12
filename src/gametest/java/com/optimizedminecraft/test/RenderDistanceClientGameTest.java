@@ -5,7 +5,11 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.spongepowered.asm.mixin.MixinEnvironment;
@@ -41,6 +45,16 @@ public class RenderDistanceClientGameTest implements FabricClientGameTest {
 				singleplayer.getClientWorld().waitForChunksRender();
 			} catch (Throwable t) {
 				LOGGER.error("Initial world never finished rendering: {}", context.computeOnClient(RenderDistanceClientGameTest::describe));
+				List<ChunkPos> missing = context.computeOnClient(RenderDistanceClientGameTest::missingChunks);
+				String serverState = singleplayer.getServer().computeOnServer(server -> {
+					ServerLevel level = server.overworld();
+					StringBuilder sb = new StringBuilder();
+					for (ChunkPos pos : missing) {
+						sb.append(pos).append(" serverLoaded=").append(level.hasChunk(pos.x, pos.z)).append("; ");
+					}
+					return sb.toString();
+				});
+				LOGGER.error("Missing on client: {}", serverState);
 				throw t;
 			}
 
@@ -74,6 +88,23 @@ public class RenderDistanceClientGameTest implements FabricClientGameTest {
 		}
 		ChunkPos pos = client.player.chunkPosition();
 		return client.level.getChunkSource().hasChunk(pos.x + PROBE_DISTANCE, pos.z);
+	}
+
+	private static List<ChunkPos> missingChunks(Minecraft client) {
+		List<ChunkPos> missing = new ArrayList<>();
+		if (client.level == null || client.player == null) {
+			return missing;
+		}
+		int distance = client.options.getEffectiveRenderDistance();
+		ChunkPos pos = client.player.chunkPosition();
+		for (int dx = -distance; dx <= distance; dx++) {
+			for (int dz = -distance; dz <= distance; dz++) {
+				if (!client.level.getChunkSource().hasChunk(pos.x + dx, pos.z + dz)) {
+					missing.add(new ChunkPos(pos.x + dx, pos.z + dz));
+				}
+			}
+		}
+		return missing;
 	}
 
 	private static String describe(Minecraft client) {

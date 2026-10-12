@@ -49,12 +49,16 @@ def remapGametestJar = tasks.register("remapGametestJar", net.fabricmc.loom.task
 }
 
 // Runs the client game tests against the built jar in a real (virtual-display) client.
+// Pass -PvanillaServer to run them with the server-side patches switched off, as a control.
 tasks.register("runProductionClientGameTest", net.fabricmc.loom.task.prod.ClientProductionRunTask) {
 	mods.from(remapGametestJar)
 	jvmArgs.add("-Dfabric.client.gametest")
 	jvmArgs.add("-Dfabric.client.gametest.disableNetworkSynchronizer=true")
 	jvmArgs.add("-Xmx3G")
 	jvmArgs.add("-XX:-OmitStackTraceInFastThrow")
+	if (project.hasProperty("vanillaServer")) {
+		jvmArgs.add("-Doptimizedmc.vanillaServer=true")
+	}
 	useXVFB = true
 }
 

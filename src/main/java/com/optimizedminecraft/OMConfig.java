@@ -54,7 +54,9 @@ public final class OMConfig {
 
 	/** Upper bound for server-side view distance. */
 	public int maxServerViewDistance() {
-		return uncapServerViewDistance ? clampedMaxRenderDistance() : VANILLA_MAX_VIEW_DISTANCE;
+		// -Doptimizedmc.vanillaServer=true switches the server side back to vanilla limits for debugging.
+		boolean uncap = uncapServerViewDistance && !Boolean.getBoolean("optimizedmc.vanillaServer");
+		return uncap ? clampedMaxRenderDistance() : VANILLA_MAX_VIEW_DISTANCE;
 	}
 
 	private static Path path() {
