@@ -54,6 +54,7 @@ tasks.register("runProductionClientGameTest", net.fabricmc.loom.task.prod.Client
 	jvmArgs.add("-Dfabric.client.gametest")
 	jvmArgs.add("-Dfabric.client.gametest.disableNetworkSynchronizer=true")
 	jvmArgs.add("-Xmx3G")
+	jvmArgs.add("-XX:-OmitStackTraceInFastThrow")
 	useXVFB = true
 }
 
