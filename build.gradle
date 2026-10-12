@@ -17,11 +17,40 @@ loom {
 	}
 }
 
+fabricApi {
+	configureTests {
+		createSourceSet = true
+		modId = "optimizedmc-test"
+		enableGameTests = false
+		enableClientGameTests = true
+		eula = true
+	}
+}
+
 dependencies {
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 	mappings loom.officialMojangMappings()
 	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	productionRuntimeMods "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+}
+
+// Runs the client game tests against the built jar in a real (virtual-display) client.
+tasks.register("runProductionClientGameTest", net.fabricmc.loom.task.prod.ClientProductionRunTask) {
+	jvmArgs.add("-Dfabric.client.gametest")
+	jvmArgs.add("-Dfabric.client.gametest.disableNetworkSynchronizer=true")
+	jvmArgs.add("-Xmx3G")
+	useXVFB = true
+}
+
+processResources {
+	def version = project.version
+	inputs.property "version", version
+
+	filesMatching("fabric.mod.json") {
+		expand "version": version
+	}
 }
 
 tasks.withType(JavaCompile).configureEach {

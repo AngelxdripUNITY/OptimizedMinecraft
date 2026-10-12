@@ -1,0 +1,40 @@
+{
+	"schemaVersion": 1,
+	"id": "optimizedmc",
+	"version": "${version}",
+	"name": "OptimizedMinecraft",
+	"description": "Uncaps render distance past 32 chunks, unlocks the framerate and warns when Java doesn't have enough memory for your render distance.",
+	"authors": ["AngelxdripUNITY"],
+	"contact": {
+		"sources": "https://github.com/AngelxdripUNITY/OptimizedMinecraft"
+	},
+	"icon": "assets/optimizedmc/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": ["com.optimizedminecraft.OptimizedMC"],
+		"client": ["com.optimizedminecraft.client.OptimizedMCClient"]
+	},
+	"mixins": [
+		"optimizedmc.mixins.json",
+		{
+			"config": "optimizedmc.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~1.21.11",
+		"java": ">=21",
+		"fabric-api": "*"
+	},
+	"suggests": {
+		"sodium": "*",
+		"lithium": "*",
+		"ferritecore": "*",
+		"immediatelyfast": "*",
+		"modernfix": "*",
+		"c2me": "*",
+		"distanthorizons": "*",
+		"bobby": "*"
+	}
+}

@@ -1,4 +1,4 @@
-# Temporary: decompiles Minecraft and prints the code the mixins target. (v2)
+# Temporary: decompiles Minecraft and prints the code the mixins target. (v3)
 name: probe
 on:
   push:
@@ -15,7 +15,7 @@ jobs:
       - run: chmod +x ./gradlew && ./gradlew genSources --no-configuration-cache -q
       - name: dump
         run: |
-          J=$(find ~/.gradle .gradle -name 'minecraft-*sources.jar' 2>/dev/null | head -5); echo "$J"
+          J=$(find ~/.gradle $PWD/.gradle -name 'minecraft-*sources.jar' 2>/dev/null | head -5); echo "$J"
           mkdir src_mc && for j in $J; do (cd src_mc && unzip -oq "$j"); done
           cd src_mc
           show() { echo "=================== $1 :: $2"; grep -n -E -C ${3:-4} "$2" "$1" || echo "NO MATCH"; }
@@ -32,4 +32,9 @@ jobs:
           show net/minecraft/client/Minecraft.java 'getFramerateLimit|FramerateLimit|setVsync|updateVsync' 3
           show net/minecraft/client/renderer/GameRenderer.java 'getDepthFar|renderDistance|getRenderDistance' 3
           show net/minecraft/client/renderer/LevelRenderer.java 'getEffectiveRenderDistance|lastViewDistance|renderDistance' 2
-          ls net/minecraft/server/level/ | head -100
+          show net/minecraft/client/gui/components/toasts/SystemToast.java 'public static|enum SystemToastId|PERIODIC' 1
+          show net/minecraft/client/Minecraft.java 'getToastManager' 1
+          show net/minecraft/server/level/TicketStorage.java 'Ticket|level' 1
+          grep -rn -l 'MAX_VIEW_DISTANCE\|, 32)' net/minecraft/server net/minecraft/client | head -30
+          grep -rn 'MAX_VIEW_DISTANCE\|clamp([a-zA-Z]*, 2, 32)\|ViewDistance.*32\|32.*ViewDistance' net/minecraft | head -30
+          ls net/minecraft/server/level/ | tr '\n' ' '

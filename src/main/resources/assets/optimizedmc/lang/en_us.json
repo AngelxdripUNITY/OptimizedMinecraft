@@ -1,0 +1,4 @@
+{
+	"optimizedmc.toast.memory.title": "Not enough Java memory",
+	"optimizedmc.toast.memory.body": "%s chunks needs ~%s GB, Java has %s GB. Raise -Xmx."
+}
