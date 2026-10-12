@@ -11,12 +11,19 @@ import java.util.Base64;
 import javax.imageio.ImageIO;
 
 import com.optimizedminecraft.OMConfig;
+import com.optimizedminecraft.client.gui.NumberFieldWidget;
 import com.optimizedminecraft.client.lod.LodManager;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.fabricmc.fabric.api.client.gametest.v1.world.TestWorldSave;
 import net.minecraft.SharedConstants;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.events.ContainerEventHandler;
+import net.minecraft.client.gui.components.events.GuiEventListener;
+import net.minecraft.client.gui.screens.options.VideoSettingsScreen;
+import net.minecraft.network.chat.Component;
+import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,8 +75,57 @@ public class LodClientGameTest implements FabricClientGameTest {
 			if (fromDisk == 0) {
 				throw new AssertionError("LOD disk cache was not used on the second visit");
 			}
+
+			testVideoSettings(context);
 		}
 		LOGGER.info("OPTIMIZEDMC LOD GAMETEST PASSED");
+	}
+
+	/** Opens Video Settings, types a render distance into the number box and checks it applied. */
+	private static void testVideoSettings(ClientGameTestContext context) {
+		context.setScreen(() -> new VideoSettingsScreen(null, Minecraft.getInstance(), Minecraft.getInstance().options));
+		context.waitTicks(5);
+		log("video-settings", context.takeScreenshot("video-settings"));
+
+		double[] target = context.computeOnClient(client -> {
+			NumberFieldWidget field = findField(client.screen);
+			if (field == null) {
+				throw new AssertionError("Render distance number box not found on the Video Settings screen");
+			}
+			double scale = client.getWindow().getGuiScale();
+			return new double[]{(field.getX() + field.getWidth() / 2.0) * scale, (field.getY() + field.getHeight() / 2.0) * scale};
+		});
+		context.getInput().setCursorPos(target[0], target[1]);
+		context.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		context.getInput().typeChars("20");
+		context.getInput().pressKey(GLFW.GLFW_KEY_ENTER);
+		context.waitTicks(2);
+		int renderDistance = context.computeOnClient(client -> client.options.renderDistance().get());
+		if (renderDistance != 20) {
+			throw new AssertionError("Typing 20 into the render distance box gave " + renderDistance);
+		}
+		LOGGER.info("Render distance number box: typed 20, option is now {}", renderDistance);
+
+		context.getInput().setCursorPos(target[0], target[1] + 40);
+		context.getInput().scroll(-40);
+		context.waitTicks(5);
+		log("video-settings-bottom", context.takeScreenshot("video-settings-bottom"));
+		context.setScreen(() -> null);
+	}
+
+	private static NumberFieldWidget findField(GuiEventListener listener) {
+		if (listener instanceof NumberFieldWidget field && field.getMessage().getString().startsWith(Component.translatable("options.renderDistance").getString())) {
+			return field;
+		}
+		if (listener instanceof ContainerEventHandler container) {
+			for (GuiEventListener child : container.children()) {
+				NumberFieldWidget found = findField(child);
+				if (found != null) {
+					return found;
+				}
+			}
+		}
+		return null;
 	}
 
 	private static LodManager.Stats settle(ClientGameTestContext context, TestSingleplayerContext singleplayer, String label) {

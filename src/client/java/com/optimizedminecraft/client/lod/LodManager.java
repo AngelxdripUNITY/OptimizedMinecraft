@@ -104,6 +104,8 @@ public final class LodManager {
 	private double projScale;
 	private float pixelError;
 	private Frustum frustum;
+	/** Second, frustum-less traversal that only queues work, so turning around doesn't pop. */
+	private boolean prefetching;
 	private int worldMinY;
 	private int worldMaxY;
 
@@ -340,6 +342,15 @@ public final class LodManager {
 				this.visit(LodNode.MAX_LEVEL, rx, rz, currentFrame);
 			}
 		}
+		if (currentFrame % 15 == 0 && this.queue.size() < 64) {
+			this.prefetching = true;
+			for (int rx = minRootX; rx <= maxRootX; rx++) {
+				for (int rz = minRootZ; rz <= maxRootZ; rz++) {
+					this.visit(LodNode.MAX_LEVEL, rx, rz, currentFrame);
+				}
+			}
+			this.prefetching = false;
+		}
 
 		if (currentFrame % 60 == 0) {
 			this.evict(currentFrame, config);
@@ -375,12 +386,14 @@ public final class LodManager {
 		}
 		if (node != null && node.ready) {
 			node.lastWantedFrame = currentFrame;
-			node.lastDrawnFrame = currentFrame;
 			if (node.dirty && node.state == LodNode.IDLE) {
 				this.enqueue(node, distance);
 			}
-			if (node.buffer != null) {
-				this.drawn.add(node);
+			if (!this.prefetching) {
+				node.lastDrawnFrame = currentFrame;
+				if (node.buffer != null) {
+					this.drawn.add(node);
+				}
 			}
 		} else {
 			this.request(level, nx, nz, distance, currentFrame);
@@ -407,7 +420,7 @@ public final class LodManager {
 		}
 		double minY = node != null && node.ready ? node.minY : this.worldMinY;
 		double maxY = node != null && node.ready ? node.maxY : this.worldMaxY;
-		if (!this.frustum.isVisible(new AABB(x0, minY, z0, x1, maxY, z1))) {
+		if (!this.prefetching && !this.frustum.isVisible(new AABB(x0, minY, z0, x1, maxY, z1))) {
 			return -1;
 		}
 		double dy = Math.max(0, Math.max(minY - this.camY, this.camY - maxY));
@@ -427,8 +440,10 @@ public final class LodManager {
 			return;
 		}
 		node.state = LodNode.QUEUED;
-		// Biggest on-screen error first: coarse and near clusters stream in before fine/far ones.
-		this.queue.add(new Task(node, distance / node.cellSize()));
+		// Biggest on-screen error first: coarse and near clusters stream in before fine/far ones;
+		// off-screen prefetch work waits behind everything visible.
+		double score = distance / node.cellSize();
+		this.queue.add(new Task(node, this.prefetching ? score * 4 + 1000 : score));
 	}
 
 	private void processUploads() {
