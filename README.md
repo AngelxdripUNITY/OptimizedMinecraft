@@ -2,24 +2,74 @@
 
 A Fabric mod for Minecraft **1.21.11** that:
 
-- **Lifts the render distance cap.** The slider goes past 32, up to 96 chunks by default and 125 at most.
-  In singleplayer the built-in server really sends that many chunks, and CI checks this in a real game client
-  on every push. On a multiplayer server, the server decides: it needs this mod too (untested on dedicated
-  servers so far), or use [Bobby](https://modrinth.com/mod/bobby) client-side.
-- **Unlocks the framerate on first launch.** It sets Max Framerate to Unlimited and turns VSync off, once.
-  After that, whatever you change in Video Settings is kept.
-- **Warns you when Java doesn't have enough memory** for the render distance you picked. Every extra chunk
-  of render distance costs memory, and the default 2 GB launcher setting runs out quickly.
+- **Draws terrain out to the horizon with Nanite-style LODs** (details below). The default reaches 512 chunks
+  in every direction, which is over 800,000 chunks of area, on top of your normal render distance.
+- **Lifts the render distance cap**, and the render distance is now a **number you type in** instead of a slider:
+  up to 96 chunks by default, 125 at most. In singleplayer the built-in server really sends that many chunks.
+  On a multiplayer server, the server decides: it needs this mod too (untested on dedicated servers so far),
+  or use [Bobby](https://modrinth.com/mod/bobby) client-side.
+- **Turns clouds off** (once; turn them back on in Video Settings if you want them).
+- **Reduces fog**: a thin fog band at the edge of loaded terrain, and rain/biome fog pushed 3× further out.
+  Underwater, lava and blindness fog are left alone.
+- **Chunk map overlay** (press **O**) showing what is really loaded: real chunks in green, LOD clusters
+  coloured by detail level, plus live stats (clusters, quads, streaming queue, samples per second, GPU memory).
+- **Unlocks the framerate on first launch** (Unlimited FPS, VSync off, once).
+- **Warns you when Java doesn't have enough memory** for the render distance you picked.
 - Ships **`tools/jvm-args`**, which gives Java as much RAM as your PC can spare (see below).
+
+Everything is in **Options → Video Settings**: render distance is in *Quality*, and the LOD/fog/map settings are in
+the *OptimizedMinecraft* section at the bottom. Number boxes: click, type, press Enter (arrow keys or the mouse
+wheel step the value while it's selected).
 
 Config file: `.minecraft/config/optimizedminecraft.json`
 
 | Setting | Default | What it does |
 |---|---|---|
-| `maxRenderDistance` | `96` | Highest value on the render distance slider (32–125) |
+| `lodEnabled` | `true` | Draw LOD terrain beyond the render distance |
+| `lodDistance` | `512` | How far LODs reach, in chunks (up to 4096) |
+| `lodPixelError` | `6` | Screen-space error budget in pixels; lower = sharper LODs, more work |
+| `lodThreads` | `0` | LOD worker threads; 0 = CPU cores − 2 |
+| `lodGpuBudgetMb` | `768` | GPU memory LOD meshes may use before old ones are dropped |
+| `lodDiskCache` | `true` | Save predicted LOD terrain in the world folder so it loads instantly next time |
+| `lodDebugColors` | `false` | Tint LODs by detail level, like Nanite's cluster view |
+| `showChunkMap` | `false` | Show the chunk map overlay (also toggled with O) |
+| `disableClouds` | `true` | Turn clouds off once |
+| `reduceFog` / `fogDistanceMultiplier` | `true` / `3.0` | Fog tweaks described above |
+| `maxRenderDistance` | `96` | Highest render distance you can type in (32–125) |
 | `uncapServerViewDistance` | `true` | Let the built-in/dedicated server send chunks beyond 32 |
 | `unlockFramerateOnFirstLaunch` | `true` | Unlimited FPS + VSync off, applied once |
 | `memoryWarnings` | `true` | Toast when `-Xmx` is too small for your render distance |
+
+## How the LODs work (the Nanite part)
+
+Unreal's Nanite splits geometry into clusters, keeps them in a hierarchy, and every frame picks the coarsest
+cluster whose error is smaller than about a pixel on screen. Clusters stream in coarse-first. This mod does the
+same for terrain:
+
+- **Clusters:** terrain is a quadtree of clusters, each a fixed 64×64 height grid. Level 0 cells are 4 blocks
+  wide; each level up doubles the cell size, up to 512-block cells. Every cluster costs the same to build and
+  draw, however much ground it covers.
+- **Picking detail:** every frame the quadtree is walked from the top, and a cluster is split into its four
+  children only while one of its cells would cover more than `lodPixelError` pixels on screen. Detail goes
+  where you can see it; far mountains are a handful of clusters.
+- **Streaming:** background threads build clusters, highest on-screen error first. The horizon appears almost
+  immediately and sharpens as finer clusters arrive; the coarser parent is drawn until all four children are
+  ready. Clusters behind you are prefetched at low priority so turning around doesn't pop.
+- **Where the data comes from:** in singleplayer, terrain is predicted straight from the world generator's noise.
+  The generator's preliminary surface estimate is refined with a few density samples, so nothing is actually
+  generated, saved or lit. Chunks you really load are captured at full LOD detail (trees and builds included)
+  and override the prediction; in multiplayer that captured data is the only source.
+- **Drawing:** one GPU buffer per cluster, drawn in its own depth range before vanilla terrain, so the far
+  horizon doesn't flicker and real chunks always sit cleanly on top. Edge skirts hide cracks between levels.
+
+Measured in CI on a 4-core GitHub runner with **2** LOD threads and software (CPU) rendering, in a normal
+world with a 256-chunk LOD radius (~206,000 chunks of area): first visit ready in ~30–55 s, rejoining the world
+in ~1 s from the disk cache, ~200,000 quads drawn, ~20–35 MB of GPU memory. A desktop CPU with more threads
+is several times faster.
+
+Limits: no LODs in the Nether (its roof would hide everything); predicted terrain has no trees, caves or
+structures until you've seen the real chunks; don't run it together with Distant Horizons (pick one; turn
+`LODs` off here if you prefer DH).
 
 ## Install
 
@@ -65,7 +115,7 @@ big-heap stutter. Rough heap needed per render distance in singleplayer:
 | [FerriteCore](https://modrinth.com/mod/ferrite-core) | Cuts memory use substantially |
 | [ImmediatelyFast](https://modrinth.com/mod/immediatelyfast) | Faster text, GUI, entity and particle rendering |
 | [ModernFix](https://modrinth.com/mod/modernfix) | Faster startup, lower memory |
-| [Distant Horizons](https://modrinth.com/mod/distanthorizons) | Level-of-detail terrain out to hundreds or thousands of chunks, for a fraction of the cost of real chunks. The right tool if you want to see *really* far. |
+| [Distant Horizons](https://modrinth.com/mod/distanthorizons) | A much more complete LOD mod (caves, trees, multiplayer server support). Use it *instead of* this mod's LODs, not with them. |
 | [Bobby](https://modrinth.com/mod/bobby) | Keeps chunks client-side so render distance can exceed a multiplayer server's view distance |
 
 On a laptop with two GPUs, make sure Java uses the dedicated one. On Windows: Settings → System → Display →
@@ -92,9 +142,13 @@ Needs JDK 25 to run Gradle (the mod itself targets Java 21).
 
 ```
 ./gradlew build                          # jar in build/libs/
-./gradlew runProductionClientGameTest    # starts the game and checks render distance > 32 really works (Linux needs xvfb)
+./gradlew runProductionClientGameTest    # starts the real game and runs the tests below (Linux needs xvfb)
 ```
 
-The game test creates a superflat world, raises render distance to 40 and waits for a chunk 36 chunks away
-to arrive. CI also runs it with `-PvanillaServer` (server patches off) and expects it to fail at 32, so a
-passing test really means the cap was lifted.
+The game tests:
+- **Render distance:** create a superflat world, raise render distance to 40 and wait for a chunk 36 chunks away
+  to arrive. CI also runs this with `-PvanillaServer` (server patches off) and expects it to fail at 32.
+- **LODs and settings:** load a normal world, wait for LOD streaming to settle, screenshot the horizon, the LOD
+  levels and the chunk map. Rejoin and check that clusters come from the disk cache. Open Video Settings, type
+  20 into the render distance box and check that it applied.
+- CI runs everything a third time with the latest Sodium for 1.21.11 installed.
