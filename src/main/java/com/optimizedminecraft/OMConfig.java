@@ -18,8 +18,13 @@ import java.nio.file.Path;
  * entrypoints run.
  */
 public final class OMConfig {
-	/** The client/server options packet stores view distance in a signed byte. */
-	public static final int HARD_MAX_RENDER_DISTANCE = 127;
+	/**
+	 * The client options packet stores view distance in a signed byte (max 127), and the
+	 * server's player ticket tracker stores chunk levels up to view distance + 2 in a byte.
+	 */
+	public static final int HARD_MAX_RENDER_DISTANCE = 125;
+
+	public static final int VANILLA_MAX_VIEW_DISTANCE = 32;
 
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 	private static OMConfig instance;
@@ -44,7 +49,12 @@ public final class OMConfig {
 	}
 
 	public int clampedMaxRenderDistance() {
-		return Math.max(32, Math.min(maxRenderDistance, HARD_MAX_RENDER_DISTANCE));
+		return Math.max(VANILLA_MAX_VIEW_DISTANCE, Math.min(maxRenderDistance, HARD_MAX_RENDER_DISTANCE));
+	}
+
+	/** Upper bound for server-side view distance. */
+	public int maxServerViewDistance() {
+		return uncapServerViewDistance ? clampedMaxRenderDistance() : VANILLA_MAX_VIEW_DISTANCE;
 	}
 
 	private static Path path() {
