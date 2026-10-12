@@ -1,0 +1,61 @@
+# Temporary: decompiles Minecraft and prints method signatures / short excerpts the mod builds against.
+name: probe
+on:
+  push:
+    paths: ['.github/workflows/probe.yml']
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        part: [render, gui]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'microsoft'
+      - run: chmod +x ./gradlew && ./gradlew genSources --no-configuration-cache -q
+      - name: dump
+        run: |
+          mkdir src_mc
+          for j in $(find $PWD/.gradle ~/.gradle -name 'minecraft-*sources.jar' 2>/dev/null); do (cd src_mc && unzip -oq "$j"); done
+          CJ=$(find ~/.gradle -name 'minecraft-client.jar' | head -1)
+          (cd src_mc && unzip -oq "$CJ" 'assets/minecraft/shaders/*')
+          cd src_mc
+          sig() { for f in "$@"; do echo "##### SIG $f"; grep -nE '^\s*(public|protected|static|default|abstract|private static final|public static final|record|enum)\b.*[({;=]' "$f" | grep -v '^\s*[0-9]*:\s*//' | cut -c1-220; done; }
+          ex() { echo "##### EX $1 :: $2"; grep -n -E -A "$3" "$2" "$1" | cut -c1-220 | head -${4:-80}; }
+          whole() { echo "##### FILE $1"; cat -n "$1" | cut -c1-200 | head -${2:-200}; }
+          if [ "${{ matrix.part }}" = render ]; then
+            sig com/mojang/blaze3d/pipeline/RenderPipeline.java com/mojang/blaze3d/systems/RenderPass.java com/mojang/blaze3d/systems/CommandEncoder.java \
+                com/mojang/blaze3d/systems/GpuDevice.java com/mojang/blaze3d/buffers/GpuBuffer.java com/mojang/blaze3d/buffers/Std140Builder.java \
+                com/mojang/blaze3d/buffers/GpuBufferSlice.java net/minecraft/client/renderer/DynamicUniforms.java net/minecraft/client/renderer/culling/Frustum.java \
+                com/mojang/blaze3d/vertex/DefaultVertexFormat.java net/minecraft/client/renderer/fog/FogData.java net/minecraft/client/renderer/fog/FogRenderer.java \
+                net/minecraft/client/renderer/state/CameraRenderState.java
+            grep -nE 'public static .*(getDevice|getDynamicUniforms|getProjectionMatrixBuffer|getShaderFog|getSequentialBuffer|getModelViewMatrix|getModelViewStack|outputColorTextureOverride|outputDepthTextureOverride)' com/mojang/blaze3d/systems/RenderSystem.java
+            grep -rn "class AutoStorageIndexBuffer" -A30 com/mojang/blaze3d/systems/RenderSystem.java | grep -E 'public|type\(' | head
+            ex net/minecraft/client/renderer/RenderPipelines.java 'CLOUDS =|DEBUG_QUADS =|_SNIPPET = RenderPipeline.builder|MATRICES_FOG_SNIPPET|MATRICES_PROJECTION_SNIPPET|FOG_SNIPPET' 10 160
+            ex net/minecraft/client/renderer/CloudRenderer.java 'public void render|private void|GpuBuffer|RenderPass|drawIndexed|setUniform|writeTransform|getSequentialBuffer|createRenderPass' 3 140
+            ex net/minecraft/client/renderer/fog/FogRenderer.java 'public Vector4f setupFog|FogData fogData|renderDistanceStart|renderDistanceEnd|environmental|skyEnd|cloudEnd|updateBuffer' 4 110
+            ex net/minecraft/client/renderer/fog/environment/AtmosphericFogEnvironment.java 'setupFog|environmental|renderDistance' 3 40
+            ex net/minecraft/client/renderer/GameRenderer.java 'getDepthFar' 6 20
+            for s in core/position_color.vsh core/position_color.fsh include/fog.glsl include/dynamictransforms.glsl include/projection.glsl core/rendertype_clouds.vsh core/rendertype_clouds.fsh; do whole assets/minecraft/shaders/$s 60; done
+            ls assets/minecraft/shaders/core | tr '\n' ' '
+          else
+            sig net/minecraft/client/gui/components/AbstractWidget.java net/minecraft/client/gui/components/events/GuiEventListener.java \
+                net/minecraft/client/input/KeyEvent.java net/minecraft/client/input/CharacterEvent.java net/minecraft/client/input/MouseButtonEvent.java net/minecraft/client/input/InputWithModifiers.java \
+                net/minecraft/client/renderer/texture/DynamicTexture.java net/minecraft/client/renderer/texture/TextureManager.java \
+                net/minecraft/world/level/chunk/ChunkGenerator.java net/minecraft/world/level/biome/BiomeSource.java net/minecraft/world/level/biome/Biome.java \
+                net/minecraft/world/level/material/MapColor.java net/minecraft/world/level/levelgen/Heightmap.java net/minecraft/server/level/ServerChunkCache.java \
+                net/minecraft/client/gui/screens/options/VideoSettingsScreen.java net/minecraft/client/gui/screens/options/OptionsSubScreen.java net/minecraft/client/gui/components/OptionsList.java
+            grep -nE 'public .* (fill|drawString|blit|drawCenteredString)\(' net/minecraft/client/gui/GuiGraphics.java | cut -c1-240
+            grep -nE 'public .*(setPixel|getPixel|NativeImage\()' com/mojang/blaze3d/platform/NativeImage.java | cut -c1-200
+            grep -nE 'cloudStatus|getCloudsType|CloudStatus' net/minecraft/client/Options.java | head
+            grep -nE 'createButton|AbstractWidget' net/minecraft/client/OptionInstance.java | head
+            ex net/minecraft/client/gui/screens/options/VideoSettingsScreen.java 'protected void addOptions|private static OptionInstance' 14 60
+            grep -nE 'getHeight\(|getHeightmap|public .*getBlockState' net/minecraft/world/level/chunk/LevelChunk.java net/minecraft/world/level/chunk/ChunkAccess.java | head
+            grep -nE 'public .*(getMapColor|col\b)' net/minecraft/world/level/block/state/BlockBehaviour.java | head -5
+            grep -rnE 'static .* (IS_OCEAN|IS_BEACH|IS_BADLANDS|IS_RIVER|IS_MOUNTAIN|IS_DEEP_OCEAN) ' net/minecraft/tags/BiomeTags.java
+            grep -nE 'public .*(hasCeiling|hasSkyLight|minY|height)\(' net/minecraft/world/level/dimension/DimensionType.java | head
+            ls net/minecraft/resources | tr '\n' ' '
+          fi
