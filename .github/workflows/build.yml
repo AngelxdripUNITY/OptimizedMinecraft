@@ -37,8 +37,14 @@ jobs:
       - name: client gametest
         run: |
           set -o pipefail
-          ./gradlew runProductionClientGameTest ${{ matrix.args }} --stacktrace 2>&1 | tee gametest.log
-          grep -q "OPTIMIZEDMC GAMETEST PASSED" gametest.log
+          if [ -z "${{ matrix.args }}" ]; then
+            ./gradlew runProductionClientGameTest --stacktrace 2>&1 | tee gametest.log
+            grep -q "OPTIMIZEDMC GAMETEST PASSED" gametest.log
+          else
+            # Negative control: with the server patches off the test must notice the 32 chunk cap.
+            ./gradlew runProductionClientGameTest ${{ matrix.args }} --stacktrace 2>&1 | tee gametest.log || true
+            grep -q "Server view distance is 32, expected 40" gametest.log
+          fi
       - name: summarize gametest errors
         if: failure()
         run: |

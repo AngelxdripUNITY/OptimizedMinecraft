@@ -5,11 +5,8 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;
-import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ChunkTrackingView;
 import net.minecraft.world.level.ChunkPos;
-import java.util.ArrayList;
-import java.util.List;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.spongepowered.asm.mixin.MixinEnvironment;
@@ -41,20 +38,13 @@ public class RenderDistanceClientGameTest implements FabricClientGameTest {
 		}
 
 		try (TestSingleplayerContext singleplayer = context.worldBuilder().create()) {
+			// The server sends a rounded area, so the corners of the square never arrive and
+			// TestClientWorldContext.waitForChunksRender() would wait forever; check along an axis instead.
 			try {
-				singleplayer.getClientWorld().waitForChunksRender();
+				context.waitFor(client -> hasChunkAt(client, 6) && client.levelRenderer.hasRenderedAllSections(),
+						SharedConstants.TICKS_PER_MINUTE * 2);
 			} catch (Throwable t) {
 				LOGGER.error("Initial world never finished rendering: {}", context.computeOnClient(RenderDistanceClientGameTest::describe));
-				List<ChunkPos> missing = context.computeOnClient(RenderDistanceClientGameTest::missingChunks);
-				String serverState = singleplayer.getServer().computeOnServer(server -> {
-					ServerLevel level = server.overworld();
-					StringBuilder sb = new StringBuilder();
-					for (ChunkPos pos : missing) {
-						sb.append(pos).append(" serverLoaded=").append(level.hasChunk(pos.x, pos.z)).append("; ");
-					}
-					return sb.toString();
-				});
-				LOGGER.error("Missing on client: {}", serverState);
 				throw t;
 			}
 
@@ -62,7 +52,10 @@ public class RenderDistanceClientGameTest implements FabricClientGameTest {
 			context.runOnClient(client -> client.options.renderDistance().set(RENDER_DISTANCE));
 			context.waitTicks(40);
 
-			int serverViewDistance = singleplayer.getServer().computeOnServer(server -> server.getPlayerList().getViewDistance());
+			// PlayerList stores whatever the client asked for; the player's tracking view is what ChunkMap actually uses.
+			int serverViewDistance = singleplayer.getServer().computeOnServer(server ->
+					server.getPlayerList().getPlayers().getFirst().getChunkTrackingView() instanceof ChunkTrackingView.Positioned positioned
+							? positioned.viewDistance() : -1);
 			if (serverViewDistance != RENDER_DISTANCE) {
 				throw new AssertionError("Server view distance is " + serverViewDistance + ", expected " + RENDER_DISTANCE);
 			}
@@ -83,28 +76,15 @@ public class RenderDistanceClientGameTest implements FabricClientGameTest {
 	}
 
 	private static boolean hasFarChunk(Minecraft client) {
+		return hasChunkAt(client, PROBE_DISTANCE);
+	}
+
+	private static boolean hasChunkAt(Minecraft client, int distance) {
 		if (client.level == null || client.player == null) {
 			return false;
 		}
 		ChunkPos pos = client.player.chunkPosition();
-		return client.level.getChunkSource().hasChunk(pos.x + PROBE_DISTANCE, pos.z);
-	}
-
-	private static List<ChunkPos> missingChunks(Minecraft client) {
-		List<ChunkPos> missing = new ArrayList<>();
-		if (client.level == null || client.player == null) {
-			return missing;
-		}
-		int distance = client.options.getEffectiveRenderDistance();
-		ChunkPos pos = client.player.chunkPosition();
-		for (int dx = -distance; dx <= distance; dx++) {
-			for (int dz = -distance; dz <= distance; dz++) {
-				if (!client.level.getChunkSource().hasChunk(pos.x + dx, pos.z + dz)) {
-					missing.add(new ChunkPos(pos.x + dx, pos.z + dz));
-				}
-			}
-		}
-		return missing;
+		return client.level.getChunkSource().hasChunk(pos.x + distance, pos.z);
 	}
 
 	private static String describe(Minecraft client) {
