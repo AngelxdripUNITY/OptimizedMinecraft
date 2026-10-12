@@ -36,8 +36,21 @@ dependencies {
 	productionRuntimeMods "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 }
 
+// The production run only loads remapped jars, so package the gametest source set as its own mod.
+def gametestJar = tasks.register("gametestJar", Jar) {
+	from sourceSets.gametest.output
+	archiveClassifier = "gametest-dev"
+}
+
+def remapGametestJar = tasks.register("remapGametestJar", net.fabricmc.loom.task.RemapJarTask) {
+	inputFile = gametestJar.flatMap { it.archiveFile }
+	classpath.from(sourceSets.gametest.compileClasspath)
+	archiveClassifier = "gametest"
+}
+
 // Runs the client game tests against the built jar in a real (virtual-display) client.
 tasks.register("runProductionClientGameTest", net.fabricmc.loom.task.prod.ClientProductionRunTask) {
+	mods.from(remapGametestJar)
 	jvmArgs.add("-Dfabric.client.gametest")
 	jvmArgs.add("-Dfabric.client.gametest.disableNetworkSynchronizer=true")
 	jvmArgs.add("-Xmx3G")

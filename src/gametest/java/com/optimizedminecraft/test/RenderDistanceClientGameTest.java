@@ -6,6 +6,8 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContex
 import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.level.ChunkPos;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.spongepowered.asm.mixin.MixinEnvironment;
 
 /**
@@ -17,6 +19,7 @@ public class RenderDistanceClientGameTest implements FabricClientGameTest {
 	private static final int RENDER_DISTANCE = 40;
 	/** A chunk this far from the player can only exist if the cap was lifted. */
 	private static final int PROBE_DISTANCE = 36;
+	private static final Logger LOGGER = LoggerFactory.getLogger("OptimizedMinecraftTest");
 
 	@Override
 	public void runTest(ClientGameTestContext context) {
@@ -42,6 +45,8 @@ public class RenderDistanceClientGameTest implements FabricClientGameTest {
 			context.waitFor(RenderDistanceClientGameTest::hasFarChunk, SharedConstants.TICKS_PER_MINUTE * 5);
 			context.takeScreenshot("render-distance-" + RENDER_DISTANCE);
 		}
+		// CI greps for this line so a test that silently never ran can't pass.
+		LOGGER.info("OPTIMIZEDMC GAMETEST PASSED");
 	}
 
 	private static boolean hasFarChunk(Minecraft client) {

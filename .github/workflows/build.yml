@@ -31,7 +31,10 @@ jobs:
           distribution: 'microsoft'
       - run: chmod +x ./gradlew
       - name: client gametest
-        run: ./gradlew runProductionClientGameTest --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew runProductionClientGameTest --stacktrace 2>&1 | tee gametest.log
+          grep -q "OPTIMIZEDMC GAMETEST PASSED" gametest.log
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -41,3 +44,4 @@ jobs:
             build/run/clientGameTest/logs
             run/screenshots
             run/logs
+            gametest.log
