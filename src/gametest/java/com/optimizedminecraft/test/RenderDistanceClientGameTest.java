@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.spongepowered.asm.mixin.MixinEnvironment;
 
 /**
- * Launches the real client, creates a superflat singleplayer world with a
+ * Launches the real client, creates a superflat singleplayer world, raises the
  * render distance above vanilla's 32 cap and checks that the server really
  * sends chunks that far out.
  */
@@ -26,23 +26,37 @@ public class RenderDistanceClientGameTest implements FabricClientGameTest {
 		// Fail fast if any mixin no longer matches the game code.
 		context.runOnClient(client -> MixinEnvironment.getCurrentEnvironment().audit());
 
-		int sliderMax = context.computeOnClient(client -> {
+		int sliderValue = context.computeOnClient(client -> {
 			client.options.renderDistance().set(RENDER_DISTANCE);
-			return client.options.renderDistance().get();
+			int value = client.options.renderDistance().get();
+			client.options.renderDistance().set(8);
+			return value;
 		});
-		if (sliderMax != RENDER_DISTANCE) {
-			throw new AssertionError("Render distance option was clamped to " + sliderMax);
+		if (sliderValue != RENDER_DISTANCE) {
+			throw new AssertionError("Render distance option was clamped to " + sliderValue);
 		}
 
 		try (TestSingleplayerContext singleplayer = context.worldBuilder().create()) {
 			singleplayer.getClientWorld().waitForChunksRender();
+
+			// Raise the distance in a running world, like a player dragging the slider.
+			context.runOnClient(client -> client.options.renderDistance().set(RENDER_DISTANCE));
+			context.waitTicks(40);
 
 			int serverViewDistance = singleplayer.getServer().computeOnServer(server -> server.getPlayerList().getViewDistance());
 			if (serverViewDistance != RENDER_DISTANCE) {
 				throw new AssertionError("Server view distance is " + serverViewDistance + ", expected " + RENDER_DISTANCE);
 			}
 
-			context.waitFor(RenderDistanceClientGameTest::hasFarChunk, SharedConstants.TICKS_PER_MINUTE * 5);
+			try {
+				context.waitFor(RenderDistanceClientGameTest::hasFarChunk, SharedConstants.TICKS_PER_MINUTE * 5);
+			} catch (Throwable t) {
+				LOGGER.error("No chunk arrived {} chunks away; furthest loaded ring on the client: {}",
+						PROBE_DISTANCE, context.computeOnClient(RenderDistanceClientGameTest::furthestLoadedRing));
+				throw t;
+			}
+			LOGGER.info("Chunk {} chunks away arrived; furthest loaded ring: {}",
+					PROBE_DISTANCE, context.computeOnClient(RenderDistanceClientGameTest::furthestLoadedRing));
 			context.takeScreenshot("render-distance-" + RENDER_DISTANCE);
 		}
 		// CI greps for this line so a test that silently never ran can't pass.
@@ -55,5 +69,19 @@ public class RenderDistanceClientGameTest implements FabricClientGameTest {
 		}
 		ChunkPos pos = client.player.chunkPosition();
 		return client.level.getChunkSource().hasChunk(pos.x + PROBE_DISTANCE, pos.z);
+	}
+
+	private static int furthestLoadedRing(Minecraft client) {
+		if (client.level == null || client.player == null) {
+			return -1;
+		}
+		ChunkPos pos = client.player.chunkPosition();
+		int furthest = -1;
+		for (int r = 0; r <= RENDER_DISTANCE + 2; r++) {
+			if (client.level.getChunkSource().hasChunk(pos.x + r, pos.z)) {
+				furthest = r;
+			}
+		}
+		return furthest;
 	}
 }
