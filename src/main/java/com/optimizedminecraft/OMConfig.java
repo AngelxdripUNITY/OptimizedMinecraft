@@ -40,9 +40,12 @@ public final class OMConfig {
 
 	/** Turn clouds off (applied once; re-enable them in Video Settings if you want them back). */
 	public boolean disableClouds = true;
-	/** Thinner fog band at the edge of loaded chunks, and rain/biome fog pushed further out. */
-	public boolean reduceFog = true;
-	/** How much further out weather and biome fog starts when {@link #reduceFog} is on. */
+	/**
+	 * "off": no distance, weather or biome fog at all; "reduced": thin edge fog, weather fog 3x further;
+	 * "vanilla": unchanged. Underwater, lava and blindness fog are always left alone.
+	 */
+	public String fog = FOG_OFF;
+	/** How much further out weather and biome fog starts in "reduced" mode. */
 	public float fogDistanceMultiplier = 3.0F;
 
 	/** Draw low-detail terrain (LODs) beyond the real render distance. */
@@ -82,6 +85,21 @@ public final class OMConfig {
 	}
 
 	public static final int MAX_LOD_DISTANCE = 4096;
+	public static final String FOG_OFF = "off";
+	public static final String FOG_REDUCED = "reduced";
+	public static final String FOG_VANILLA = "vanilla";
+
+	public String fogMode() {
+		return FOG_REDUCED.equals(this.fog) || FOG_VANILLA.equals(this.fog) ? this.fog : FOG_OFF;
+	}
+
+	public void cycleFog() {
+		this.fog = switch (this.fogMode()) {
+			case FOG_OFF -> FOG_REDUCED;
+			case FOG_REDUCED -> FOG_VANILLA;
+			default -> FOG_OFF;
+		};
+	}
 
 	public int clampedLodDistance() {
 		return Math.max(0, Math.min(lodDistance, MAX_LOD_DISTANCE));

@@ -39,7 +39,7 @@ final class CapturedChunks {
 	}
 
 	/** Must run on the client thread (reads blocks and biomes from the client level). */
-	void capture(ClientLevel level, LevelChunk chunk) {
+	void capture(ClientLevel level, LevelChunk chunk, BlockColorCache blockColors) {
 		if (this.chunks.size() >= MAX_CHUNKS) {
 			return;
 		}
@@ -52,7 +52,8 @@ final class CapturedChunks {
 			for (int i = 0; i < CELLS; i++) {
 				int x = pos.getMinBlockX() + i * 4 + 2;
 				int z = pos.getMinBlockZ() + j * 4 + 2;
-				int y = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, x & 15, z & 15);
+				// MOTION_BLOCKING skips grass tufts and flowers but keeps leaves and water.
+				int y = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, x & 15, z & 15);
 				int slot = i + j * CELLS;
 				if (y < minY) {
 					heights[slot] = LodNode.NO_HEIGHT;
@@ -66,9 +67,11 @@ final class CapturedChunks {
 				}
 				heights[slot] = (short) (y + 1);
 				if (state.getFluidState().is(FluidTags.WATER)) {
-					colors[slot] = LodColors.water(level.getBiome(mutable).value().getWaterColor(), waterDepth(chunk, mutable, minY));
+					int water = BlockColorCache.multiply(blockColors.waterTexture(), blockColors.waterTint(level, mutable));
+					colors[slot] = LodColors.water(water, waterDepth(chunk, mutable, minY));
 				} else {
-					colors[slot] = tint(level, mutable, mapColor);
+					int color = blockColors.topColor(level, state, mutable);
+					colors[slot] = color >= 0 ? color : LodColors.scale(mapColor.col, 0.7F);
 				}
 			}
 		}
@@ -83,17 +86,6 @@ final class CapturedChunks {
 		}
 		pos.setY(top);
 		return top - y + 1;
-	}
-
-	/** Map colours of grass, leaves and water are untinted; apply the biome tint like the real blocks. */
-	private static int tint(ClientLevel level, BlockPos pos, MapColor mapColor) {
-		if (mapColor == MapColor.GRASS) {
-			return LodColors.scale(level.getBiome(pos).value().getGrassColor(pos.getX(), pos.getZ()), 0.9F);
-		}
-		if (mapColor == MapColor.PLANT) {
-			return LodColors.scale(level.getBiome(pos).value().getFoliageColor(), 0.72F);
-		}
-		return mapColor.col;
 	}
 
 	/** Copies the captured column at block (x, z) into slot {@code i}; false if that chunk was never received. */

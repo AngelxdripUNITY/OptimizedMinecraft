@@ -7,7 +7,12 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import com.mojang.blaze3d.platform.InputConstants;
+import com.optimizedminecraft.client.gui.OptimizedSettingsScreen;
 import com.optimizedminecraft.client.hud.ChunkMapHud;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.fabricmc.fabric.api.client.screen.v1.Screens;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.options.OptionsScreen;
 import com.optimizedminecraft.client.lod.LodManager;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -33,6 +38,7 @@ public class OptimizedMCClient implements ClientModInitializer {
 	private static final int DEFAULTS_VERSION = 1;
 
 	private KeyMapping chunkMapKey;
+	private KeyMapping settingsKey;
 
 	@Override
 	public void onInitializeClient() {
@@ -48,12 +54,28 @@ public class OptimizedMCClient implements ClientModInitializer {
 		HudElementRegistry.addLast(Identifier.fromNamespaceAndPath(OptimizedMC.MOD_ID, "chunk_map"), ChunkMapHud::render);
 
 		KeyMapping.Category category = KeyMapping.Category.register(Identifier.fromNamespaceAndPath(OptimizedMC.MOD_ID, "main"));
+		// F7/F8: O is Iris's shader pack key.
 		this.chunkMapKey = KeyBindingHelper.registerKeyBinding(
-				new KeyMapping("key.optimizedmc.chunk_map", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_O, category));
+				new KeyMapping("key.optimizedmc.chunk_map", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_F7, category));
+		this.settingsKey = KeyBindingHelper.registerKeyBinding(
+				new KeyMapping("key.optimizedmc.settings", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_F8, category));
+
+		// Sodium replaces Video Settings, so put a way into our settings on the main Options screen too.
+		ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
+			if (screen instanceof OptionsScreen) {
+				Screens.getButtons(screen).add(Button.builder(Component.translatable("optimizedmc.settings.button"),
+						button -> client.setScreen(new OptimizedSettingsScreen(screen))).bounds(5, 5, 140, 20).build());
+			}
+		});
 	}
 
 	private void tick(Minecraft client) {
 		LodManager.INSTANCE.tick(client);
+		while (this.settingsKey.consumeClick()) {
+			if (client.screen == null) {
+				client.setScreen(new OptimizedSettingsScreen(null));
+			}
+		}
 		while (this.chunkMapKey.consumeClick()) {
 			OMConfig config = OMConfig.get();
 			config.showChunkMap = !config.showChunkMap;

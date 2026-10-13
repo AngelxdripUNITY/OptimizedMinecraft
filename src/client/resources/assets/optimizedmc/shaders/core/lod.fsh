@@ -3,6 +3,8 @@
 #moj_import <minecraft:fog.glsl>
 #moj_import <minecraft:dynamictransforms.glsl>
 
+uniform sampler2D Sampler2;
+
 in float sphericalVertexDistance;
 in float cylindricalVertexDistance;
 in vec2 horizontalOffset;
@@ -15,7 +17,10 @@ void main() {
     if (length(horizontalOffset) < ColorModulator.a) {
         discard;
     }
-    vec4 color = vec4(vertexColor.rgb * ColorModulator.rgb, 1.0);
+    // Light it exactly like a real surface block in full sky light (sky 15, block 0): the
+    // lightmap carries time of day, gamma, night vision and lightning flashes.
+    vec4 light = texture(Sampler2, vec2(0.5 / 16.0, 15.5 / 16.0));
+    vec4 color = vec4(vertexColor.rgb * light.rgb * ColorModulator.rgb, 1.0);
     fragColor = apply_fog(color, sphericalVertexDistance, cylindricalVertexDistance,
         FogEnvironmentalStart, FogEnvironmentalEnd, FogRenderDistanceStart, FogRenderDistanceEnd, FogColor);
 }

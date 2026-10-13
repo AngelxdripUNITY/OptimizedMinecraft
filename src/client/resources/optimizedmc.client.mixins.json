@@ -7,6 +7,7 @@
 		"GameRendererAccessor",
 		"OptionInstanceMixin",
 		"OptionsMixin",
+		"SodiumConfigBuilderMixin",
 		"VideoSettingsScreenMixin"
 	],
 	"injectors": {

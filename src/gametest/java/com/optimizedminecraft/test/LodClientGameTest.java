@@ -12,6 +12,7 @@ import javax.imageio.ImageIO;
 
 import com.optimizedminecraft.OMConfig;
 import com.optimizedminecraft.client.gui.NumberFieldWidget;
+import com.optimizedminecraft.client.gui.OptimizedSettingsScreen;
 import com.optimizedminecraft.client.lod.LodManager;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -41,6 +42,7 @@ public class LodClientGameTest implements FabricClientGameTest {
 		config.lodDistance = 256;
 		config.lodDebugColors = false;
 		config.showChunkMap = false;
+		config.fog = OMConfig.FOG_OFF;
 		context.runOnClient(client -> client.options.renderDistance().set(8));
 
 		TestWorldSave save;
@@ -63,6 +65,12 @@ public class LodClientGameTest implements FabricClientGameTest {
 			context.waitTicks(10);
 			log("chunk-map", context.takeScreenshot("chunk-map"));
 			config.showChunkMap = false;
+
+			// LODs must darken at night like real terrain (they use the game's lightmap).
+			singleplayer.getServer().runCommand("time set midnight");
+			context.waitTicks(5);
+			log("lod-night", context.takeScreenshot("lod-night"));
+			singleplayer.getServer().runCommand("time set noon");
 		}
 
 		// Second visit: predicted terrain should come from the disk cache instead of the generator.
@@ -123,6 +131,10 @@ public class LodClientGameTest implements FabricClientGameTest {
 		context.getInput().scroll(-40);
 		context.waitTicks(5);
 		log("video-settings-bottom", context.takeScreenshot("video-settings-bottom"));
+
+		context.setScreen(() -> new OptimizedSettingsScreen(null));
+		context.waitTicks(5);
+		log("omc-settings", context.takeScreenshot("omc-settings"));
 		context.setScreen(() -> null);
 	}
 

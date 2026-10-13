@@ -41,7 +41,14 @@ final class TerrainSampler {
 	private final NoiseRouter router;
 	private final int maxY;
 
-	TerrainSampler(ServerLevel level) {
+	/** Untinted average texture colours; biome tints are applied per sample. */
+	record Palette(int grass, int leaves, int sand, int redSand, int terracotta, int snow, int stone, int water) {
+	}
+
+	private final Palette palette;
+
+	TerrainSampler(ServerLevel level, Palette palette) {
+		this.palette = palette;
 		ServerChunkCache chunkSource = level.getChunkSource();
 		this.generator = chunkSource.getGenerator();
 		this.randomState = chunkSource.randomState();
@@ -114,30 +121,30 @@ final class TerrainSampler {
 		int surface = water ? this.seaLevel : floor;
 		Holder<Biome> biome = this.biomes.getNoiseBiome(QuartPos.fromBlock(x), QuartPos.fromBlock(surface), QuartPos.fromBlock(z), this.climate);
 		heights[i] = (short) surface;
-		colors[i] = water ? waterColor(biome.value(), this.seaLevel - floor) : this.landColor(biome, x, floor, z);
+		colors[i] = water
+				? LodColors.water(BlockColorCache.multiply(this.palette.water(), biome.value().getWaterColor()), this.seaLevel - floor)
+				: this.landColor(biome, x, floor, z);
 	}
 
 	private int landColor(Holder<Biome> holder, int x, int y, int z) {
 		Biome biome = holder.value();
 		if (holder.is(BiomeTags.IS_BADLANDS)) {
-			return 0xB8653A;
+			return ((x >> 5) + (y >> 3)) % 3 == 0 ? this.palette.redSand() : this.palette.terracotta();
 		}
 		if (holder.is(BiomeTags.IS_BEACH) || holder.is(Biomes.DESERT)) {
-			return 0xD6C995;
+			return this.palette.sand();
 		}
 		if (biome.coldEnoughToSnow(new BlockPos(x, y, z), this.seaLevel)) {
-			return 0xEDF1F5;
+			return this.palette.snow();
 		}
 		if (holder.is(Biomes.STONY_PEAKS) || holder.is(Biomes.STONY_SHORE)) {
-			return 0x8A8A8A;
+			return this.palette.stone();
 		}
 		if (holder.is(BiomeTags.IS_FOREST) || holder.is(BiomeTags.IS_TAIGA) || holder.is(BiomeTags.IS_JUNGLE)) {
-			return LodColors.scale(biome.getFoliageColor(), 0.72F);
+			// Seen from afar a forest is mostly canopy.
+			return BlockColorCache.multiply(this.palette.leaves(), biome.getFoliageColor());
 		}
-		return LodColors.scale(biome.getGrassColor(x, z), 0.9F);
+		return BlockColorCache.multiply(this.palette.grass(), biome.getGrassColor(x, z));
 	}
 
-	private static int waterColor(Biome biome, int depth) {
-		return LodColors.water(biome.getWaterColor(), depth);
-	}
 }

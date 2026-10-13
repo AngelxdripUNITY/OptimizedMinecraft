@@ -20,7 +20,7 @@ import com.optimizedminecraft.OptimizedMC;
  */
 final class LodDiskCache {
 	/** Bump when sampling changes so old files are ignored. */
-	private static final String VERSION = "v1";
+	private static final String VERSION = "v2";
 
 	private final Path dir;
 	private volatile boolean failed;

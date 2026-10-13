@@ -19,6 +19,7 @@ import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.optimizedminecraft.OMConfig;
@@ -59,6 +60,7 @@ public final class LodManager {
 			.withVertexShader(Identifier.fromNamespaceAndPath(OptimizedMC.MOD_ID, "core/lod"))
 			.withFragmentShader(Identifier.fromNamespaceAndPath(OptimizedMC.MOD_ID, "core/lod"))
 			.withVertexFormat(DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS)
+			.withSampler("Sampler2")
 			.withCull(false)
 			.build());
 
@@ -80,6 +82,7 @@ public final class LodManager {
 	private final PriorityBlockingQueue<Task> queue = new PriorityBlockingQueue<>(256, Comparator.comparingDouble(Task::score));
 	private final ConcurrentLinkedQueue<Upload> uploads = new ConcurrentLinkedQueue<>();
 	private final CapturedChunks captured = new CapturedChunks();
+	private BlockColorCache blockColors = new BlockColorCache();
 	private final AtomicLong frame = new AtomicLong();
 	private final AtomicLong samples = new AtomicLong();
 	private final AtomicLong diskLoads = new AtomicLong();
@@ -150,6 +153,8 @@ public final class LodManager {
 		this.nodes.clear();
 		this.drawn.clear();
 		this.captured.clear();
+		// Fresh cache per world, so resource pack changes since last time are picked up.
+		this.blockColors = new BlockColorCache();
 		this.level = newLevel;
 		this.sampler = null;
 		this.diskCache = null;
@@ -157,7 +162,7 @@ public final class LodManager {
 		if (newLevel != null && server != null && !newLevel.dimensionType().hasCeiling()) {
 			ServerLevel serverLevel = server.getLevel(newLevel.dimension());
 			if (serverLevel != null) {
-				this.sampler = new TerrainSampler(serverLevel);
+				this.sampler = new TerrainSampler(serverLevel, this.blockColors.palette());
 				if (OMConfig.get().lodDiskCache) {
 					String dimension = newLevel.dimension().toString().replaceAll("[^a-zA-Z0-9_.-]+", "_");
 					this.diskCache = new LodDiskCache(server.getWorldPath(LevelResource.ROOT).resolve("optimizedmc_lod").resolve(dimension));
@@ -208,7 +213,7 @@ public final class LodManager {
 		if (chunkLevel != this.level || !this.isActive()) {
 			return;
 		}
-		this.captured.capture(chunkLevel, chunk);
+		this.captured.capture(chunkLevel, chunk, this.blockColors);
 		int maxDirtyLevel = this.sampler == null ? LodNode.MAX_LEVEL : 1;
 		int x = chunk.getPos().getMinBlockX();
 		int z = chunk.getPos().getMinBlockZ();
@@ -517,6 +522,9 @@ public final class LodManager {
 			pass.setPipeline(PIPELINE);
 			RenderSystem.bindDefaultUniforms(pass);
 			pass.setUniform("Projection", this.projectionBuffer.currentBuffer());
+			// The same lightmap real terrain uses: day/night, gamma, night vision, lightning flashes.
+			pass.bindTexture("Sampler2", client.gameRenderer.lightTexture().getTextureView(),
+					RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
 			pass.setIndexBuffer(indexBuffer, indices.type());
 			for (int i = 0; i < this.drawn.size(); i++) {
 				LodNode node = this.drawn.get(i);

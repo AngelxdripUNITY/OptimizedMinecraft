@@ -8,8 +8,15 @@
 	"optimizedmc.options.lodEnabled": "LODs",
 	"optimizedmc.options.lodPixelError": "LOD Pixel Error",
 	"optimizedmc.options.lodDebugColors": "LOD Level Colors",
-	"optimizedmc.options.reduceFog": "Reduce Fog",
-	"optimizedmc.options.chunkMap": "Chunk Map (O)",
+	"optimizedmc.options.chunkMap": "Chunk Map (F7)",
 	"key.optimizedmc.chunk_map": "Toggle Chunk Map",
-	"key.category.optimizedmc.main": "OptimizedMinecraft"
+	"key.category.optimizedmc.main": "OptimizedMinecraft",
+	"optimizedmc.options.fog": "Fog: %s",
+	"optimizedmc.options.fog.off": "Off",
+	"optimizedmc.options.fog.reduced": "Reduced",
+	"optimizedmc.options.fog.vanilla": "Vanilla",
+	"optimizedmc.settings.title": "OptimizedMinecraft Settings",
+	"optimizedmc.settings.button": "OptimizedMinecraft...",
+	"optimizedmc.settings.hint": "Open this screen any time with F8",
+	"key.optimizedmc.settings": "Open OptimizedMinecraft Settings"
 }

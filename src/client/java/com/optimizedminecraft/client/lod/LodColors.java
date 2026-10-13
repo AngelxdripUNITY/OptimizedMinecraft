@@ -4,9 +4,9 @@ final class LodColors {
 	private LodColors() {
 	}
 
-	/** Biome water colour, darker the deeper it is (same for predicted and captured water so the seam matches). */
-	static int water(int biomeWaterColor, int depth) {
-		return scale(biomeWaterColor, Math.max(0.45F, 1.0F - depth / 48.0F));
+	/** Water colour, darker the deeper it is (same for predicted and captured water so the seam matches). */
+	static int water(int waterColor, int depth) {
+		return scale(waterColor, Math.max(0.5F, 1.0F - depth / 40.0F));
 	}
 
 	static int scale(int rgb, float factor) {

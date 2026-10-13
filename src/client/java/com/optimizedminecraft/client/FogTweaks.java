@@ -9,25 +9,44 @@ import net.minecraft.tags.FluidTags;
 import net.minecraft.world.effect.MobEffects;
 
 public final class FogTweaks {
+	/** "No fog" distance: far beyond anything that is drawn. */
+	private static final float NO_FOG = 1.0e7F;
+
 	private FogTweaks() {
 	}
 
+	/** Also what Sodium's terrain renderer uses: it reads these values right after us. */
 	public static void adjust(FogData fog) {
 		OMConfig config = OMConfig.get();
 		float lodEnd = LodManager.INSTANCE.fogEndBlocks();
 		if (lodEnd > 0) {
-			// LODs continue the terrain, so the fog wall moves from the chunk edge out to the LOD edge.
+			// LODs continue the terrain, so the edge fog moves from the chunk edge out to the LOD edge.
 			fog.renderDistanceStart = lodEnd * 0.6F;
 			fog.renderDistanceEnd = lodEnd;
-		} else if (config.reduceFog) {
-			float band = fog.renderDistanceEnd - fog.renderDistanceStart;
-			fog.renderDistanceStart = fog.renderDistanceEnd - band * 0.35F;
 		}
-
-		if (config.reduceFog && !gameplayFog()) {
-			float multiplier = Math.max(1.0F, config.fogDistanceMultiplier);
-			fog.environmentalStart = Math.max(0.0F, fog.environmentalStart) * multiplier;
-			fog.environmentalEnd *= multiplier;
+		if (gameplayFog()) {
+			return;
+		}
+		switch (config.fogMode()) {
+			case OMConfig.FOG_OFF -> {
+				fog.renderDistanceStart = NO_FOG;
+				fog.renderDistanceEnd = NO_FOG;
+				fog.environmentalStart = NO_FOG;
+				fog.environmentalEnd = NO_FOG;
+				fog.skyEnd = NO_FOG;
+				fog.cloudEnd = NO_FOG;
+			}
+			case OMConfig.FOG_REDUCED -> {
+				if (lodEnd <= 0) {
+					float band = fog.renderDistanceEnd - fog.renderDistanceStart;
+					fog.renderDistanceStart = fog.renderDistanceEnd - band * 0.35F;
+				}
+				float multiplier = Math.max(1.0F, config.fogDistanceMultiplier);
+				fog.environmentalStart = Math.max(0.0F, fog.environmentalStart) * multiplier;
+				fog.environmentalEnd *= multiplier;
+			}
+			default -> {
+			}
 		}
 	}
 

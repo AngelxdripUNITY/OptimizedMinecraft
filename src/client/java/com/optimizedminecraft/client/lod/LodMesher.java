@@ -15,8 +15,9 @@ final class LodMesher {
 	static final int VERTEX_BYTES = 16;
 	static final int QUAD_BYTES = VERTEX_BYTES * 4;
 
-	private static final float WALL_SHADE_X = 0.78F;
-	private static final float WALL_SHADE_Z = 0.64F;
+	// Vanilla's fixed face shading: east/west faces 0.6, north/south 0.8, tops 1.0.
+	private static final float WALL_SHADE_X = 0.6F;
+	private static final float WALL_SHADE_Z = 0.8F;
 
 	private LodMesher() {
 	}
@@ -49,8 +50,10 @@ final class LodMesher {
 	}
 
 	/**
-	 * Cheap hillshading: brighten slopes facing north-west and darken the rest, quantised
-	 * so perfectly flat ground keeps one colour and still merges into large quads.
+	 * Fake lighting for the tops, which are too coarse for real per-block shading: slopes facing
+	 * away from the north-west sky darken, and cells sunk below their neighbours (valleys,
+	 * river beds) darken like ambient occlusion would. Never brighter than vanilla's 1.0, and
+	 * quantised so flat ground keeps one colour and still merges into large quads.
 	 */
 	private static int[] shadedTops(short[] heights, int[] colors, int cellSize) {
 		int[] shaded = new int[heights.length];
@@ -61,11 +64,15 @@ final class LodMesher {
 				if (h == LodNode.NO_HEIGHT) {
 					continue;
 				}
-				float dx = heightOr(heights, index + 1, h) - heightOr(heights, index - 1, h);
-				float dz = heightOr(heights, index + LodNode.GRID, h) - heightOr(heights, index - LodNode.GRID, h);
-				float slope = (dx + dz) / (2.0F * cellSize);
-				float shade = Math.max(0.6F, Math.min(1.15F, 1.0F - 0.35F * slope));
-				shade = Math.round(shade * 16.0F) / 16.0F;
+				int east = heightOr(heights, index + 1, h);
+				int west = heightOr(heights, index - 1, h);
+				int south = heightOr(heights, index + LodNode.GRID, h);
+				int north = heightOr(heights, index - LodNode.GRID, h);
+				float slope = ((east - west) + (south - north)) / (2.0F * cellSize);
+				float shade = Math.max(0.7F, Math.min(1.0F, 1.0F - 0.3F * slope));
+				float sunk = (Math.max(0, east - h) + Math.max(0, west - h) + Math.max(0, south - h) + Math.max(0, north - h)) / (4.0F * cellSize);
+				shade *= 1.0F - Math.min(0.25F, sunk * 0.25F);
+				shade = Math.round(shade * 20.0F) / 20.0F;
 				shaded[index] = shade == 1.0F ? colors[index] : LodColors.scale(colors[index], shade);
 			}
 		}
