@@ -1,0 +1,19 @@
+{
+	"required": true,
+	"package": "com.optimizedminecraft.client.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"client": [
+		"FogRendererMixin",
+		"GameRendererAccessor",
+		"OptionInstanceMixin",
+		"OptionsMixin",
+		"SodiumConfigBuilderMixin",
+		"VideoSettingsScreenMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}

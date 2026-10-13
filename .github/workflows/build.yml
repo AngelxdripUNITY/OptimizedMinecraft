@@ -1,0 +1,95 @@
+name: build
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: gradle/actions/wrapper-validation@v6
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'microsoft'
+      - run: chmod +x ./gradlew
+      - name: build
+        run: ./gradlew build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: OptimizedMinecraft
+          path: build/libs/
+
+  # Starts the real game (software OpenGL under a virtual display), creates a
+  # world at render distance 40 and checks chunks arrive beyond vanilla's 32.
+  client-test:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        args: ['', '-PvanillaServer', '-Psodium']
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'microsoft'
+      - run: chmod +x ./gradlew
+      - name: client gametest
+        run: |
+          set -o pipefail
+          ARGS="${{ matrix.args }}"
+          if [ "$ARGS" = "-Psodium" ]; then
+            # Latest Sodium for this Minecraft version, to check the LOD pass and settings screen work alongside it.
+            SODIUM=$(curl -s 'https://api.modrinth.com/v2/project/sodium/version?game_versions=%5B%221.21.11%22%5D&loaders=%5B%22fabric%22%5D' | jq -r '.[0].version_number')
+            echo "Sodium $SODIUM"
+            ARGS="-PsodiumVersion=$SODIUM"
+          fi
+          if [ "$ARGS" != "-PvanillaServer" ]; then
+            ./gradlew runProductionClientGameTest $ARGS --stacktrace 2>&1 | tee gametest.log
+            grep -q "OPTIMIZEDMC GAMETEST PASSED" gametest.log
+            grep -q "OPTIMIZEDMC LOD GAMETEST PASSED" gametest.log
+          else
+            # Negative control: with the server patches off the test must notice the 32 chunk cap.
+            ./gradlew runProductionClientGameTest ${{ matrix.args }} --stacktrace 2>&1 | tee gametest.log || true
+            grep -q "Server view distance is 32, expected 40" gametest.log
+          fi
+      - name: summarize gametest errors
+        if: failure()
+        run: |
+          grep -n -E "OptimizedMinecraft|view distance|GameTest|gametest" gametest.log | grep -v SCREENSHOT | head -40 || true
+          grep -n -m 2 -A 25 -E "AssertionError|ArrayIndexOutOfBounds|IndexOutOfBounds|NullPointerException|Mixin.*(fail|error)|InvalidInjection|crash" gametest.log | head -120 || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: Test screenshots and logs${{ matrix.args }}
+          path: |
+            build/run/clientGameTest/screenshots
+            build/run/clientGameTest/logs
+            run/screenshots
+            run/logs
+            gametest.log
+
+  # Publishes the jar as a GitHub Release ("latest-build") once every test passed, so it can be
+  # downloaded without a GitHub login (Actions artifacts need one).
+  release:
+    if: github.event_name == 'push'
+    needs: [build, client-test]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v7
+        with:
+          name: OptimizedMinecraft
+          path: dist
+      - name: publish latest-build release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          JAR=$(ls dist/*.jar | grep -v -E -- '-(gametest|dev|sources)' | head -1)
+          echo "Publishing $JAR"
+          gh release delete latest-build --yes --cleanup-tag || true
+          gh release create latest-build "$JAR" --target "$GITHUB_SHA" --prerelease \
+            --title "OptimizedMinecraft latest build" \
+            --notes "Built from ${GITHUB_SHA::7} on ${GITHUB_REF_NAME}. All game tests passed (vanilla and with Sodium). Needs Fabric Loader and Fabric API for Minecraft 1.21.11."

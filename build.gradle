@@ -1,0 +1,94 @@
+plugins {
+	id 'net.fabricmc.fabric-loom-remap' version "${loom_version}"
+}
+
+base {
+	archivesName = "optimizedminecraft"
+}
+
+loom {
+	splitEnvironmentSourceSets()
+
+	mods {
+		"optimizedmc" {
+			sourceSet sourceSets.main
+			sourceSet sourceSets.client
+		}
+	}
+}
+
+fabricApi {
+	configureTests {
+		createSourceSet = true
+		modId = "optimizedmc-test"
+		enableGameTests = false
+		enableClientGameTests = true
+		eula = true
+	}
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	mappings loom.officialMojangMappings()
+	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	productionRuntimeMods "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+}
+
+// -PsodiumVersion=<version> adds Sodium to the production game test, to check compatibility.
+if (project.hasProperty("sodiumVersion")) {
+	repositories {
+		maven {
+			name = "Modrinth"
+			url = "https://api.modrinth.com/maven"
+		}
+	}
+	dependencies {
+		productionRuntimeMods "maven.modrinth:sodium:${project.sodiumVersion}"
+	}
+}
+
+// The production run only loads remapped jars, so package the gametest source set as its own mod.
+def gametestJar = tasks.register("gametestJar", Jar) {
+	from sourceSets.gametest.output
+	archiveClassifier = "gametest-dev"
+}
+
+def remapGametestJar = tasks.register("remapGametestJar", net.fabricmc.loom.task.RemapJarTask) {
+	inputFile = gametestJar.flatMap { it.archiveFile }
+	classpath.from(sourceSets.gametest.compileClasspath)
+	archiveClassifier = "gametest"
+}
+
+// Runs the client game tests against the built jar in a real (virtual-display) client.
+// Pass -PvanillaServer to run them with the server-side patches switched off, as a control.
+tasks.register("runProductionClientGameTest", net.fabricmc.loom.task.prod.ClientProductionRunTask) {
+	mods.from(remapGametestJar)
+	jvmArgs.add("-Dfabric.client.gametest")
+	jvmArgs.add("-Dfabric.client.gametest.disableNetworkSynchronizer=true")
+	jvmArgs.add("-Xmx3G")
+	jvmArgs.add("-XX:-OmitStackTraceInFastThrow")
+	if (project.hasProperty("vanillaServer")) {
+		jvmArgs.add("-Doptimizedmc.vanillaServer=true")
+	}
+	useXVFB = true
+}
+
+processResources {
+	def version = project.version
+	inputs.property "version", version
+
+	filesMatching("fabric.mod.json") {
+		expand "version": version
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 21
+}
+
+java {
+	sourceCompatibility = JavaVersion.VERSION_21
+	targetCompatibility = JavaVersion.VERSION_21
+}

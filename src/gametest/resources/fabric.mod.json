@@ -1,0 +1,16 @@
+{
+	"schemaVersion": 1,
+	"id": "optimizedmc-test",
+	"version": "1.0.0",
+	"name": "OptimizedMinecraft tests",
+	"environment": "client",
+	"entrypoints": {
+		"fabric-client-gametest": [
+			"com.optimizedminecraft.test.RenderDistanceClientGameTest",
+			"com.optimizedminecraft.test.LodClientGameTest"
+		]
+	},
+	"depends": {
+		"optimizedmc": "*"
+	}
+}
