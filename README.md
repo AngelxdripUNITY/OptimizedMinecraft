@@ -8,18 +8,20 @@ A Fabric mod for Minecraft **1.21.11** that:
   up to 96 chunks by default, 125 at most. In singleplayer the built-in server really sends that many chunks.
   On a multiplayer server, the server decides: it needs this mod too (untested on dedicated servers so far),
   or use [Bobby](https://modrinth.com/mod/bobby) client-side.
-- **Turns clouds off** (once; turn them back on in Video Settings if you want them).
-- **Reduces fog**: a thin fog band at the edge of loaded terrain, and rain/biome fog pushed 3× further out.
-  Underwater, lava and blindness fog are left alone.
-- **Chunk map overlay** (press **O**) showing what is really loaded: real chunks in green, LOD clusters
+- **Turns clouds off** (once; turn them back on in the settings if you want them).
+- **Fog off**: no distance, weather or biome fog (Fog: Off / Reduced / Vanilla in the settings).
+  Underwater, lava and blindness fog are left alone. Works with Sodium too.
+- **Chunk map overlay** (press **F7**) showing what is really loaded: real chunks in green, LOD clusters
   coloured by detail level, plus live stats (clusters, quads, streaming queue, samples per second, GPU memory).
 - **Unlocks the framerate on first launch** (Unlimited FPS, VSync off, once).
 - **Warns you when Java doesn't have enough memory** for the render distance you picked.
 - Ships **`tools/jvm-args`**, which gives Java as much RAM as your PC can spare (see below).
 
-Everything is in **Options → Video Settings**: render distance is in *Quality*, and the LOD/fog/map settings are in
-the *OptimizedMinecraft* section at the bottom. Number boxes: click, type, press Enter (arrow keys or the mouse
-wheel step the value while it's selected).
+**Settings:** press **F8** in game, or click **OptimizedMinecraft...** in the top-left corner of the Options screen.
+That screen has the render distance (type a number, up to 125), LOD distance and detail, fog, clouds and the chunk
+map, and it works whether or not Sodium is installed. Without Sodium the same settings are also at the bottom of
+Video Settings. Number boxes: click, type, press Enter (arrow keys or the mouse wheel step the value while it's
+selected). With Sodium, its own render distance slider is also raised past 32.
 
 Config file: `.minecraft/config/optimizedminecraft.json`
 
@@ -32,9 +34,9 @@ Config file: `.minecraft/config/optimizedminecraft.json`
 | `lodGpuBudgetMb` | `768` | GPU memory LOD meshes may use before old ones are dropped |
 | `lodDiskCache` | `true` | Save predicted LOD terrain in the world folder so it loads instantly next time |
 | `lodDebugColors` | `false` | Tint LODs by detail level, like Nanite's cluster view |
-| `showChunkMap` | `false` | Show the chunk map overlay (also toggled with O) |
+| `showChunkMap` | `false` | Show the chunk map overlay (also toggled with F7) |
 | `disableClouds` | `true` | Turn clouds off once |
-| `reduceFog` / `fogDistanceMultiplier` | `true` / `3.0` | Fog tweaks described above |
+| `fog` | `"off"` | `"off"`, `"reduced"` (thin edge fog, weather fog `fogDistanceMultiplier`× further) or `"vanilla"` |
 | `maxRenderDistance` | `96` | Highest render distance you can type in (32–125) |
 | `uncapServerViewDistance` | `true` | Let the built-in/dedicated server send chunks beyond 32 |
 | `unlockFramerateOnFirstLaunch` | `true` | Unlimited FPS + VSync off, applied once |
@@ -61,6 +63,9 @@ same for terrain:
   and override the prediction; in multiplayer that captured data is the only source.
 - **Drawing:** one GPU buffer per cluster, drawn in its own depth range before vanilla terrain, so the far
   horizon doesn't flicker and real chunks always sit cleanly on top. Edge skirts hide cracks between levels.
+- **Looks like the real terrain:** colours are the average of each block's actual top texture (from your
+  resource packs) times the same biome tint the game uses, sides get vanilla's face shading, and everything is
+  lit through the game's own lightmap, so LODs get darker at night exactly like real chunks.
 
 Measured in CI on a 4-core GitHub runner with **2** LOD threads and software (CPU) rendering, in a normal
 world with a 256-chunk LOD radius (~206,000 chunks of area): first visit ready in ~30–55 s, rejoining the world
